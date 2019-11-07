@@ -1,0 +1,231 @@
+#                                      +---------+
+#                                      |         |
+#                                      |   RT1   |
+#                                      | 1.1.1.1 |-lo1 (2001:db8:1000::1/128)
+#                                      |         |
+#                                      +---------+
+#                                           |rt1-eth0 (.1)
+#                                           |
+#                                           |10.0.1.0/24
+#                                           |2001:DB8:1::/64
+#                                           |
+#                                           |rt2-eth0 (.2)
+#                                      +---------+
+#                                      |         |
+#                                      |   RT2   |
+#                                      | 2.2.2.2 |-lo1 (2001:db8:1000::2/128)
+#                                      |         |
+#                                      +---------+
+#                             rt2-eth2 (.2)| |rt2-eth1 (.2)
+#                                          | |
+#                  10.0.3.0/24 +-----------+ |
+#              2001:DB8:3::/64 | +-----------+-----------+
+#                              | |      10.0.2.0/24      |
+#                              | |    2001:DB8:2::/64    |
+#                              | |                       |
+#                 rt3-eth1 (.3)| |rt3-eth0 (.3)          |rt4-eth0 (.4)
+#                           +---------+             +---------+
+#                           |         |             |         |
+#(2001:db8:1000::3/128) lo1-|   RT3   |             |   RT4   |-lo1 (2001:db8:1000::4/128)
+#                           | 3.3.3.3 |             | 4.4.4.4 |
+#                           |         |             |         |
+#                           +---------+             +---------+
+
+---
+
+routers:
+
+  rt1:
+    links:
+      rt1-lo1:
+        ipv4: 1.1.1.1/32
+        ipv6: 2001:db8:1000::1/128
+      rt1-eth0:
+        peer: [rt2, rt2-eth0]
+        ipv4: 10.0.1.1/24
+        ipv6: 2001:db8:1::1/64
+    frr:
+      staticd:
+        config: |
+      zebra:
+        run: yes
+        config: |
+          interface rt1-eth0
+           no link-detect
+          !
+      bfdd:
+        config: |
+      isisd:
+        run: yes
+        config: |
+          interface rt1-eth0
+           ip router isis 1
+           ipv6 router isis 1
+           isis bfd
+          !
+          router isis 1
+           net 47.0023.0000.0000.0000.0000.0000.0000.1900.0001.00
+           is-type level-1
+           redistribute ipv4 connected level-1
+           redistribute ipv6 connected level-1
+          !
+
+  rt2:
+    links:
+      rt2-lo1:
+        ipv4: 2.2.2.2/32
+        ipv6: 2001:db8:1000::2/128
+      rt2-eth0:
+        peer: [rt1, rt1-eth0]
+        ipv4: 10.0.1.2/24
+        ipv6: 2001:db8:1::2/64
+      rt2-eth1:
+        peer: [sw1, sw1-1]
+        ipv4: 10.0.2.2/24
+        ipv6: 2001:db8:2::2/64
+      rt2-eth2:
+        peer: [rt3, rt3-eth1]
+        ipv4: 10.0.3.2/24
+        ipv6: 2001:db8:3::2/64
+    frr:
+      staticd:
+        config: |
+      zebra:
+        run: yes
+        config: |
+          interface rt2-eth0
+           no link-detect
+          !
+          interface rt2-eth1
+           no link-detect
+          !
+          interface rt2-eth2
+           no link-detect
+          !
+      bfdd:
+        config: |
+      isisd:
+        run: yes
+        config: |
+          interface rt2-eth0
+           ip router isis 1
+           ipv6 router isis 1
+           isis bfd
+          !
+          interface rt2-eth1
+           ip router isis 1
+           ipv6 router isis 1
+           isis bfd
+          !
+          interface rt2-eth2
+           ip router isis 1
+           ipv6 router isis 1
+           isis bfd
+          !
+          router isis 1
+           net 47.0023.0000.0000.0000.0000.0000.0000.1900.0002.00
+           is-type level-1
+           redistribute ipv4 connected level-1
+           redistribute ipv6 connected level-1
+          !
+
+  rt3:
+    links:
+      rt3-lo1:
+        ipv4: 3.3.3.3/32
+        ipv6: 2001:db8:1000::3/128
+      rt3-eth0:
+        peer: [sw1, sw1-2]
+        ipv4: 10.0.2.3/24
+        ipv6: 2001:db8:2::3/64
+      rt3-eth1:
+        peer: [rt2, rt2-eth2]
+        ipv4: 10.0.3.3/24
+        ipv6: 2001:db8:3::3/64
+    frr:
+      zebra:
+        run: yes
+        config: |
+          interface rt3-eth0
+           no link-detect
+          !
+          interface rt3-eth1
+           no link-detect
+          !
+      bfdd:
+        config: |
+      isisd:
+        run: yes
+        config: |
+          interface rt3-eth0
+           ip router isis 1
+           ipv6 router isis 1
+           isis bfd
+          !
+          interface rt3-eth1
+           ip router isis 1
+           ipv6 router isis 1
+           isis bfd
+          !
+          router isis 1
+           net 47.0023.0000.0000.0000.0000.0000.0000.1900.0003.00
+           is-type level-1
+           redistribute ipv4 connected level-1
+           redistribute ipv6 connected level-1
+          !
+
+  rt4:
+    links:
+      rt4-lo1:
+        ipv4: 4.4.4.4/32
+        ipv6: 2001:db8:1000::4/128
+      rt4-eth0:
+        peer: [sw1, sw1-3]
+        ipv4: 10.0.2.4/24
+        ipv6: 2001:db8:2::4/64
+    frr:
+      zebra:
+        run: yes
+        config: |
+          interface rt4-eth0
+           no link-detect
+          !
+      bfdd:
+        config: |
+      isisd:
+        run: yes
+        config: |
+          interface rt4-eth0
+           ip router isis 1
+           ipv6 router isis 1
+           isis bfd
+          !
+          router isis 1
+           net 47.0023.0000.0000.0000.0000.0000.0000.1900.0004.00
+           is-type level-1
+           redistribute ipv4 connected level-1
+           redistribute ipv6 connected level-1
+          !
+
+switches:
+  sw1:
+    links:
+      sw1-1:
+        peer: [rt2, rt2-eth1]
+      sw1-2:
+        peer: [rt3, rt3-eth0]
+      sw1-3:
+        peer: [rt4, rt4-eth0]
+
+frr:
+  base-configs:
+    all: |
+      hostname %(node)-%(daemon)
+      password 1
+      log file %(logdir)/%(node)-%(daemon).log
+    zebra: |
+      debug zebra kernel
+    isisd: |
+      debug isis bfd
+      debug isis events
+      debug isis lsp-gen

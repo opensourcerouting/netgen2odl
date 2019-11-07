@@ -1,0 +1,554 @@
+#                               +---------+
+#                               | Router  |
+#                          Fa1/0|   RT7   |Fa2/0
+#                   +-----------+10.0.10.7+-----------+
+#                   |           |         |           |
+#                   |           +---------+           |
+#      172.16.1.0/24|                |Fa1/1           |172.16.3.0/24
+#      +------------+                |                +------------+
+#      |                             |172.16.2.0/24                |
+#      |                             |                             |
+#      |Fa2/0                        |Fa2/1                        |Fa2/0
+# +---------+                   +---------+                   +---------+
+# |   Hub   |                   |   Hub   |                   |   Hub   |
+# |   RT1   |Fa1/1         Fa1/1|   RT2   |Fa2/0         Fa1/1|   RT3   |
+# |10.0.10.1+-------------------+10.0.10.2+-------------------+10.0.10.3|
+# |         |   172.16.4.0/24   |         |   172.16.5.0/24   |         |
+# +---------+                   +---------+                   +---------+
+#      |Fa1/0                        |Fa1/0                        |Fa1/0
+#      |                             |                             |
+#      |172.16.6.0/24                |172.16.7.0/24                |172.16.8.0/24
+#      |                             |                             |
+#      |Fa1/0                        |Fa1/0                        |Fa1/0
+# +---------+                   +---------+                   +---------+
+# |  Spoke  |                   |  Spoke  |                   |  Spoke  |
+# |   RT4   |                   |   RT5   |                   |   RT6   |
+# |10.0.10.4|                   |10.0.10.5|                   |10.0.10.6|
+# |         |                   |         |                   |         |
+# +---------+                   +---------+                   +---------+
+
+---
+
+routers:
+
+  rt1:
+    links:
+      f1-0:
+        peer: [rt4, f1-0]
+      f1-1:
+        peer: [rt2, f1-1]
+      f2-0:
+        peer: [rt7, f1-0]
+    dynamips:
+      image: c7200_advsecurity
+      config: |
+        interface lo1
+         ip address 10.0.10.1 255.255.255.255
+        !
+        interface fa1/0
+         ip address 172.16.6.1 255.255.255.0
+         no shutdown
+        !
+        interface fa1/1
+         ip address 172.16.4.1 255.255.255.0
+         no shutdown
+        !
+        interface fa2/0
+         ip address 172.16.1.1 255.255.255.0
+         no shutdown
+        !
+        interface tunnel 1
+         tunnel mode gre multipoint
+         tunnel source 10.0.10.1
+         ip address 192.168.0.1 255.255.255.0
+         ip nhrp network 1
+         ip nhrp redirect
+         ip nhrp holdtime 300
+         ip nhrp map multicast dynamic
+         ! enable eigrp neighborship with other hubs
+         ip nhrp map multicast 10.0.10.2
+         ip nhrp map 192.168.0.2 10.0.10.2
+         ip nhrp map multicast 10.0.10.7
+         ip nhrp map 192.168.0.7 10.0.10.7
+         ! eigrp parameters
+         bandwidth 1000000
+         delay 10
+         ! try to avoid fragmentation
+         ip mtu 1400
+         ip tcp adjust-mss 1360
+        !
+        key chain 1
+         key 1
+          key-string hub1
+        !
+        router ospf 1
+         router-id 10.0.10.1
+         network 10.0.10.1 0.0.0.0 area 0
+         network 172.16.0.0 0.0.255.255 area 0
+        !
+        router eigrp DMVPN-SPOKES
+         !
+         address-family ipv4 unicast autonomous-system 1
+          !
+          af-interface Tunnel1
+           no split-horizon
+           authentication mode md5
+           authentication key-chain 1
+           summary-address 10.0.20.0 255.255.255.0
+          exit-af-interface
+          !
+          topology base
+           redistribute eigrp 2
+          exit-af-topology
+          !
+          network 192.168.0.0
+         exit-address-family
+        !
+        router eigrp DMVPN-FULL
+         !
+         address-family ipv4 unicast autonomous-system 2
+          !
+          af-interface Tunnel1
+           no split-horizon
+          exit-af-interface
+          !
+          topology base
+           redistribute eigrp 1
+          exit-af-topology
+          !
+          network 192.168.0.0
+         exit-address-family
+        !
+
+  rt2:
+    links:
+      f1-0:
+        peer: [rt5, f1-0]
+      f1-1:
+        peer: [rt1, f1-1]
+      f2-0:
+        peer: [rt3, f1-1]
+      f2-1:
+        peer: [rt7, f1-1]
+    dynamips:
+      image: c7200_advsecurity
+      config: |
+        interface lo1
+         ip address 10.0.10.2 255.255.255.255
+        !
+        interface fa1/0
+         ip address 172.16.7.2 255.255.255.0
+         no shutdown
+        !
+        interface fa1/1
+         ip address 172.16.4.2 255.255.255.0
+         no shutdown
+        !
+        interface fa2/0
+         ip address 172.16.5.2 255.255.255.0
+         no shutdown
+        !
+        interface fa2/1
+         ip address 172.16.2.2 255.255.255.0
+         no shutdown
+        !
+        interface tunnel 1
+         tunnel mode gre multipoint
+         tunnel source 10.0.10.2
+         ip address 192.168.0.2 255.255.255.0
+         ip nhrp network 1
+         ip nhrp redirect
+         ip nhrp holdtime 300
+         ip nhrp map multicast dynamic
+         ! enable eigrp neighborship with other hubs
+         ip nhrp map multicast 10.0.10.1
+         ip nhrp map 192.168.0.1 10.0.10.1
+         ip nhrp map multicast 10.0.10.3
+         ip nhrp map 192.168.0.3 10.0.10.3
+         ip nhrp map multicast 10.0.10.7
+         ip nhrp map 192.168.0.7 10.0.10.7
+         ! eigrp parameters
+         bandwidth 1000000
+         delay 10
+         ! try to avoid fragmentation
+         ip mtu 1400
+         ip tcp adjust-mss 1360
+        !
+        key chain 1
+         key 1
+          key-string hub2
+        !
+        router ospf 1
+         router-id 10.0.10.2
+         network 10.0.10.2 0.0.0.0 area 0
+         network 172.16.0.0 0.0.255.255 area 0
+        !
+        router eigrp DMVPN-SPOKES
+         !
+         address-family ipv4 unicast autonomous-system 1
+          !
+          af-interface Tunnel1
+           no split-horizon
+           authentication mode md5
+           authentication key-chain 1
+           summary-address 10.0.20.0 255.255.255.0
+          exit-af-interface
+          !
+          topology base
+           redistribute eigrp 2
+          exit-af-topology
+          !
+          network 192.168.0.0
+         exit-address-family
+        !
+        router eigrp DMVPN-FULL
+         !
+         address-family ipv4 unicast autonomous-system 2
+          !
+          af-interface Tunnel1
+           no split-horizon
+          exit-af-interface
+          !
+          topology base
+           redistribute eigrp 1
+          exit-af-topology
+          !
+          network 192.168.0.0
+         exit-address-family
+        !
+
+  rt3:
+    links:
+      f1-0:
+        peer: [rt6, f1-0]
+      f1-1:
+        peer: [rt2, f2-0]
+      f2-0:
+        peer: [rt7, f2-0]
+    dynamips:
+      image: c7200_advsecurity
+      config: |
+        interface lo1
+         ip address 10.0.10.3 255.255.255.255
+        !
+        interface fa1/0
+         ip address 172.16.8.3 255.255.255.0
+         no shutdown
+        !
+        interface fa1/1
+         ip address 172.16.5.3 255.255.255.0
+         no shutdown
+        !
+        interface fa2/0
+         ip address 172.16.3.3 255.255.255.0
+         no shutdown
+        !
+        interface tunnel 1
+         tunnel mode gre multipoint
+         tunnel source 10.0.10.3
+         ip address 192.168.0.3 255.255.255.0
+         ip nhrp network 1
+         ip nhrp redirect
+         ip nhrp holdtime 300
+         ip nhrp map multicast dynamic
+         ! enable eigrp neighborship with other hubs
+         ip nhrp map multicast 10.0.10.2
+         ip nhrp map 192.168.0.2 10.0.10.2
+         ip nhrp map multicast 10.0.10.7
+         ip nhrp map 192.168.0.7 10.0.10.7
+         ! eigrp parameters
+         bandwidth 1000000
+         delay 10
+         ! try to avoid fragmentation
+         ip mtu 1400
+         ip tcp adjust-mss 1360
+        !
+        key chain 1
+         key 1
+          key-string hub3
+        !
+        router ospf 1
+         router-id 10.0.10.3
+         network 10.0.10.3 0.0.0.0 area 0
+         network 172.16.0.0 0.0.255.255 area 0
+        !
+        router eigrp DMVPN-SPOKES
+         !
+         address-family ipv4 unicast autonomous-system 1
+          !
+          af-interface Tunnel1
+           no split-horizon
+           authentication mode md5
+           authentication key-chain 1
+           summary-address 10.0.20.0 255.255.255.0
+          exit-af-interface
+          !
+          topology base
+           redistribute eigrp 2
+          exit-af-topology
+          !
+          network 192.168.0.0
+         exit-address-family
+        !
+        router eigrp DMVPN-FULL
+         !
+         address-family ipv4 unicast autonomous-system 2
+          !
+          af-interface Tunnel1
+           no split-horizon
+          exit-af-interface
+          !
+          topology base
+           redistribute eigrp 1
+          exit-af-topology
+          !
+          network 192.168.0.0
+         exit-address-family
+        !
+
+  rt4:
+    links:
+      f1-0:
+        peer: [rt1, f1-0]
+    dynamips:
+      image: c7200_advsecurity
+      config: |
+        interface lo1
+         ip address 10.0.10.4 255.255.255.255
+        !
+        interface lo2
+         ip address 10.0.20.4 255.255.255.255
+        !
+        interface fa1/0
+         ip address 172.16.6.4 255.255.255.0
+         no shutdown
+        !
+        interface tunnel 1
+         tunnel mode gre multipoint
+         tunnel source 10.0.10.4
+         ip address 192.168.0.4 255.255.255.0
+         ip nhrp network 1
+         ip nhrp shortcut
+         ip nhrp holdtime 300
+         ip nhrp map multicast 10.0.10.1
+         ip nhrp map 192.168.0.1 10.0.10.1
+         ip nhrp nhs 192.168.0.1
+         ! eigrp parameters
+         bandwidth 1000000
+         delay 10
+         ! try to avoid fragmentation
+         ip mtu 1400
+         ip tcp adjust-mss 1360
+        !
+        key chain 1
+         key 1
+          key-string hub1
+        !
+        router ospf 1
+         router-id 10.0.10.4
+         network 10.0.10.4 0.0.0.0 area 0
+         network 172.16.0.0 0.0.255.255 area 0
+        !
+        router eigrp DMVPN
+         !
+         address-family ipv4 unicast autonomous-system 1
+          !
+          af-interface Tunnel1
+           no split-horizon
+           authentication mode md5
+           authentication key-chain 1
+          exit-af-interface
+          !
+          network 10.0.20.4 0.0.0.0
+          network 192.168.0.0
+         exit-address-family
+        !
+
+  rt5:
+    links:
+      f1-0:
+        peer: [rt2, f1-0]
+    dynamips:
+      image: c7200_advsecurity
+      config: |
+        interface lo1
+         ip address 10.0.10.5 255.255.255.255
+        !
+        interface lo2
+         ip address 10.0.20.5 255.255.255.255
+        !
+        interface fa1/0
+         ip address 172.16.7.5 255.255.255.0
+         no shutdown
+        !
+        interface tunnel 1
+         tunnel mode gre multipoint
+         tunnel source 10.0.10.5
+         ip address 192.168.0.5 255.255.255.0
+         ip nhrp network 1
+         ip nhrp shortcut
+         ip nhrp holdtime 300
+         ip nhrp map multicast 10.0.10.2
+         ip nhrp map 192.168.0.2 10.0.10.2
+         ip nhrp nhs 192.168.0.2
+         ! eigrp parameters
+         bandwidth 1000000
+         delay 10
+         ! try to avoid fragmentation
+         ip mtu 1400
+         ip tcp adjust-mss 1360
+        !
+        key chain 1
+         key 1
+          key-string hub2
+        !
+        router ospf 1
+         router-id 10.0.10.5
+         network 10.0.10.5 0.0.0.0 area 0
+         network 172.16.0.0 0.0.255.255 area 0
+        !
+        router eigrp DMVPN
+         !
+         address-family ipv4 unicast autonomous-system 1
+          !
+          af-interface Tunnel1
+           no split-horizon
+           authentication mode md5
+           authentication key-chain 1
+          exit-af-interface
+          !
+          network 10.0.20.5 0.0.0.0
+          network 192.168.0.0
+         exit-address-family
+        !
+
+  rt6:
+    links:
+      f1-0:
+        peer: [rt3, f1-0]
+    dynamips:
+      image: c7200_advsecurity
+      config: |
+        interface lo1
+         ip address 10.0.10.6 255.255.255.255
+        !
+        interface lo2
+         ip address 10.0.20.6 255.255.255.255
+        !
+        interface fa1/0
+         ip address 172.16.8.6 255.255.255.0
+         no shutdown
+        !
+        interface tunnel 1
+         tunnel mode gre multipoint
+         tunnel source 10.0.10.6
+         ip address 192.168.0.6 255.255.255.0
+         ip nhrp network 1
+         ip nhrp shortcut
+         ip nhrp holdtime 300
+         ip nhrp map multicast 10.0.10.3
+         ip nhrp map 192.168.0.3 10.0.10.3
+         ip nhrp nhs 192.168.0.3
+         ! eigrp parameters
+         bandwidth 1000000
+         delay 10
+         ! try to avoid fragmentation
+         ip mtu 1400
+         ip tcp adjust-mss 1360
+        !
+        key chain 1
+         key 1
+          key-string hub3
+        !
+        router ospf 1
+         router-id 10.0.10.6
+         network 10.0.10.6 0.0.0.0 area 0
+         network 172.16.0.0 0.0.255.255 area 0
+        !
+        router eigrp DMVPN
+         !
+         address-family ipv4 unicast autonomous-system 1
+          !
+          af-interface Tunnel1
+           no split-horizon
+           authentication mode md5
+           authentication key-chain 1
+          exit-af-interface
+          !
+          network 10.0.20.6 0.0.0.0
+          network 192.168.0.0
+         exit-address-family
+        !
+
+  rt7:
+    links:
+      f1-0:
+        peer: [rt1, f2-0]
+      f1-1:
+        peer: [rt2, f2-1]
+      f2-0:
+        peer: [rt3, f2-0]
+    dynamips:
+      image: c7200_advsecurity
+      config: |
+        interface lo1
+         ip address 10.0.10.7 255.255.255.255
+        !
+        interface fa1/0
+         ip address 172.16.1.7 255.255.255.0
+         no shutdown
+        !
+        interface fa1/1
+         ip address 172.16.2.7 255.255.255.0
+         no shutdown
+        !
+        interface f2/0
+         ip address 172.16.3.7 255.255.255.0
+         no shutdown
+        !
+        interface tunnel 1
+         tunnel mode gre multipoint
+         tunnel source 10.0.10.7
+         ip address 192.168.0.7 255.255.255.0
+         ip nhrp network 1
+         ! enable eigrp neighborship with other hubs
+         ip nhrp map multicast 10.0.10.1
+         ip nhrp map 192.168.0.1 10.0.10.1
+         ip nhrp map multicast 10.0.10.2
+         ip nhrp map 192.168.0.2 10.0.10.2
+         ip nhrp map multicast 10.0.10.3
+         ip nhrp map 192.168.0.3 10.0.10.3
+         ! eigrp parameters
+         bandwidth 1000000
+         delay 11
+         ! try to avoid fragmentation
+         ip mtu 1400
+         ip tcp adjust-mss 1360
+        !
+        router ospf 1
+         router-id 10.0.10.7
+         network 10.0.10.7 0.0.0.0 area 0
+         network 172.16.0.0 0.0.255.255 area 0
+        !
+        router eigrp DMVPN-FULL
+         !
+         address-family ipv4 unicast autonomous-system 2
+          !
+          af-interface Tunnel1
+           no split-horizon
+          exit-af-interface
+          !
+          network 192.168.0.0
+         exit-address-family
+
+dynamips:
+  base-config: |
+    hostname %(node)
+    no ip domain lookup
+    !
+    line con 0
+     exec-timeout 0 0
+     logging synchronous
+     privilege level 15
+     no login
+    !

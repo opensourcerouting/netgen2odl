@@ -1,0 +1,74 @@
+# Dynamic topology
+
+---
+
+autogen:
+  layout:
+    type: line
+    size: 2
+    parallel-links: 10
+
+  ipv4:
+    loopbacks:
+      start: 192.168.0.0
+      step: 0.0.0.1
+    subnets:
+      start: 10.0.0.0
+      step: 0.0.0.4
+      prefixlen: 30
+    routes:
+      number: 100
+      start: '80.0.0.0'
+      step: '0.0.0.4'
+      prefixlen: 30
+      step-by-router: '0.1.0.0'
+      nexthop-if: 'lo'
+
+  frr:
+    zebra:
+      config:
+
+    bgpd:
+      config: |
+        router bgp 1
+         !
+         address-family ipv4
+          redistribute kernel
+         !
+        !
+      config-per-interface: |
+        router bgp
+         neighbor %(peer-v4) remote-as internal
+         neighbor %(peer-v4) bfd
+         !
+        !
+      config-per-loopback: |
+        router bgp
+         bgp router-id %(address-v4)
+         !
+         address-family ipv4
+          network %(address-v4)/32
+         !
+        !
+
+    bfdd:
+      config-per-interface: |
+        bfd
+         peer %(peer-v4)
+          receive-interval 50
+          transmit-interval 50
+          no shutdown
+        !
+
+frr:
+  perf: yes
+  base-configs:
+    all: |
+      hostname %(node)-%(daemon)
+      password 1
+      log file %(logdir)/%(node)-%(daemon).log
+    zebra: |
+      debug zebra kernel
+      debug zebra rib
+    bgpd: |
+      debug bgp zebra

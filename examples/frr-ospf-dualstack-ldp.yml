@@ -1,0 +1,361 @@
+#                                      +---------+
+#                                      |         |
+#                                      |   RT1   |
+#                                      | 1.1.1.1 |-lo1 (2001:db8:1000::1/128)
+#                                      |         |
+#                                      +---------+
+#                                           |rt1-eth0 (.1)
+#                                           |
+#                                           |10.0.1.0/24
+#                                           |2001:DB8:1::/64
+#                                           |
+#                                           |rt2-eth0 (.2)
+#                                      +---------+
+#                                      |         |
+#                                      |   RT2   |
+#                                      | 2.2.2.2 |-lo1 (2001:db8:1000::2/128)
+#                                      |         |
+#                                      +---------+
+#                             rt2-eth2 (.2)| |rt2-eth1 (.2)
+#                                          | |
+#                  10.0.3.0/24 +-----------+ |
+#              2001:DB8:3::/64 | +-----------+-----------+
+#                              | |      10.0.2.0/24      |
+#                              | |    2001:DB8:2::/64    |
+#                              | |                       |
+#                 rt3-eth1 (.3)| |rt3-eth0 (.3)          |rt4-eth0 (.4)
+#                           +---------+             +---------+
+#                           |         |             |         |
+#(2001:db8:1000::3/128) lo1-|   RT3   |             |   RT4   |-lo1 (2001:db8:1000::4/128)
+#                           | 3.3.3.3 |             | 4.4.4.4 |
+#                           |         |             |         |
+#                           +---------+             +---------+
+
+---
+
+routers:
+
+  rt1:
+    links:
+      rt1-lo1:
+        ipv4: 1.1.1.1/32
+        ipv6: 2001:db8:1000::1/128
+      rt1-eth0:
+        peer: [rt2, rt2-eth0]
+        mpls: yes
+        ipv4: 10.0.1.1/24
+        ipv6: 2001:db8:1::1/64
+    frr:
+      zebra:
+        config: |
+          interface rt1-eth0
+           no link-detect
+          !
+      ospfd:
+        config: |
+          interface rt1-eth0
+           ip ospf area 0
+           ip ospf hello-interval 1
+           ip ospf dead-interval 3
+          !
+          router ospf
+           router-id 1.1.1.1
+           redistribute connected
+          !
+      ospf6d:
+        config: |
+          interface rt1-eth0
+           ipv6 ospf6 hello-interval 1
+           ipv6 ospf6 dead-interval 3
+          !
+          router ospf6
+           router-id 1.1.1.1
+           interface rt1-eth0 area 0.0.0.0
+           redistribute connected
+          !
+      ldpd:
+        config: |
+          mpls ldp
+           router-id 1.1.1.1
+           !
+           address-family ipv4
+            discovery transport-address 1.1.1.1
+            !
+            interface rt1-eth0
+            !
+           !
+           address-family ipv6
+            discovery transport-address 2001:db8:1000::1
+            !
+            interface rt1-eth0
+            !
+           !
+          !
+
+  rt2:
+    links:
+      rt2-lo1:
+        ipv4: 2.2.2.2/32
+        ipv6: 2001:db8:1000::2/128
+      rt2-eth0:
+        peer: [rt1, rt1-eth0]
+        mpls: yes
+        ipv4: 10.0.1.2/24
+        ipv6: 2001:db8:1::2/64
+      rt2-eth1:
+        peer: [sw1, sw1-1]
+        mpls: yes
+        ipv4: 10.0.2.2/24
+        ipv6: 2001:db8:2::2/64
+      rt2-eth2:
+        peer: [rt3, rt3-eth1]
+        mpls: yes
+        ipv4: 10.0.3.2/24
+        ipv6: 2001:db8:3::2/64
+    frr:
+      zebra:
+        config: |
+          interface rt2-eth0
+           no link-detect
+          !
+          interface rt2-eth1
+           no link-detect
+          !
+          interface rt2-eth2
+           no link-detect
+          !
+      ospfd:
+        config: |
+          interface rt2-eth0
+           ip ospf area 0
+           ip ospf hello-interval 1
+           ip ospf dead-interval 3
+          !
+          interface rt2-eth1
+           ip ospf area 0
+           ip ospf hello-interval 1
+           ip ospf dead-interval 3
+          !
+          interface rt2-eth2
+           ip ospf area 0
+           ip ospf hello-interval 1
+           ip ospf dead-interval 3
+          !
+          router ospf
+           router-id 2.2.2.2
+           redistribute connected
+          !
+      ospf6d:
+        config: |
+          interface rt2-eth0
+           ipv6 ospf6 hello-interval 1
+           ipv6 ospf6 dead-interval 3
+          !
+          interface rt2-eth1
+           ipv6 ospf6 hello-interval 1
+           ipv6 ospf6 dead-interval 3
+          !
+          interface rt2-eth2
+           ipv6 ospf6 hello-interval 1
+           ipv6 ospf6 dead-interval 3
+          !
+          router ospf6
+           router-id 2.2.2.2
+           interface rt2-eth0 area 0.0.0.0
+           interface rt2-eth1 area 0.0.0.0
+           interface rt2-eth2 area 0.0.0.0
+           redistribute connected
+          !
+      ldpd:
+        config: |
+          mpls ldp
+           router-id 2.2.2.2
+           !
+           address-family ipv4
+            discovery transport-address 2.2.2.2
+            !
+            interface rt2-eth0
+            !
+            interface rt2-eth1
+            !
+            interface rt2-eth2
+            !
+           !
+           address-family ipv6
+            discovery transport-address 2001:db8:1000::2
+            !
+            interface rt2-eth0
+            !
+            interface rt2-eth1
+            !
+            interface rt2-eth2
+            !
+           !
+          !
+
+  rt3:
+    links:
+      rt3-lo1:
+        ipv4: 3.3.3.3/32
+        ipv6: 2001:db8:1000::3/128
+      rt3-eth0:
+        peer: [sw1, sw1-2]
+        mpls: yes
+        ipv4: 10.0.2.3/24
+        ipv6: 2001:db8:2::3/64
+      rt3-eth1:
+        peer: [rt2, rt2-eth2]
+        mpls: yes
+        ipv4: 10.0.3.3/24
+        ipv6: 2001:db8:3::3/64
+    frr:
+      zebra:
+        config: |
+          interface rt3-eth0
+           no link-detect
+          !
+          interface rt3-eth1
+           no link-detect
+          !
+      ospfd:
+        config: |
+          interface rt3-eth0
+           ip ospf area 0
+           ip ospf hello-interval 1
+           ip ospf dead-interval 3
+          !
+          interface rt3-eth1
+           ip ospf area 0
+           ip ospf hello-interval 1
+           ip ospf dead-interval 3
+          !
+          router ospf
+           router-id 3.3.3.3
+           redistribute connected
+          !
+      ospf6d:
+        config: |
+          interface rt3-eth0
+           ipv6 ospf6 hello-interval 1
+           ipv6 ospf6 dead-interval 3
+          !
+          interface rt3-eth1
+           ipv6 ospf6 hello-interval 1
+           ipv6 ospf6 dead-interval 3
+          !
+          router ospf6
+           router-id 3.3.3.3
+           interface rt3-eth0 area 0.0.0.0
+           interface rt3-eth1 area 0.0.0.0
+           redistribute connected
+          !
+      ldpd:
+        config: |
+          mpls ldp
+           router-id 3.3.3.3
+           !
+           address-family ipv4
+            discovery transport-address 3.3.3.3
+            !
+            interface rt3-eth0
+            !
+            interface rt3-eth1
+            !
+           !
+           address-family ipv6
+            discovery transport-address 2001:db8:1000::3
+            !
+            interface rt3-eth0
+            !
+            interface rt3-eth1
+            !
+           !
+          !
+
+  rt4:
+    links:
+      rt4-lo1:
+        ipv4: 4.4.4.4/32
+        ipv6: 2001:db8:1000::4/128
+      rt4-eth0:
+        peer: [sw1, sw1-3]
+        mpls: yes
+        ipv4: 10.0.2.4/24
+        ipv6: 2001:db8:2::4/64
+    frr:
+      zebra:
+        config: |
+          interface rt4-eth0
+           no link-detect
+          !
+      ospfd:
+        config: |
+          interface rt4-eth0
+           ip ospf area 0
+           ip ospf hello-interval 1
+           ip ospf dead-interval 3
+          !
+          router ospf
+           router-id 4.4.4.4
+           redistribute connected
+          !
+      ospf6d:
+        config: |
+          interface rt4-eth0
+           ipv6 ospf6 hello-interval 1
+           ipv6 ospf6 dead-interval 3
+          !
+          router ospf6
+           router-id 4.4.4.4
+           interface rt4-eth0 area 0.0.0.0
+           redistribute connected
+          !
+      ldpd:
+        config: |
+          mpls ldp
+           router-id 4.4.4.4
+           !
+           address-family ipv4
+            discovery transport-address 4.4.4.4
+            !
+            interface rt4-eth0
+            !
+           !
+           address-family ipv6
+            discovery transport-address 2001:db8:1000::4
+            !
+            interface rt4-eth0
+            !
+           !
+          !
+
+switches:
+  sw1:
+    links:
+      sw1-1:
+        peer: [rt2, rt2-eth1]
+      sw1-2:
+        peer: [rt3, rt3-eth0]
+      sw1-3:
+        peer: [rt4, rt4-eth0]
+
+frr:
+  base-configs:
+    all: |
+      hostname %(node)-%(daemon)
+      password 1
+      log file %(logdir)/%(node)-%(daemon).log
+    zebra: |
+      !debug zebra kernel
+      debug zebra packet
+    ospfd: |
+      debug ospf zebra
+    ospf6d: |
+      debug ospf6 zebra
+    ldpd: |
+      debug mpls ldp zebra
+      debug mpls ldp event
+      debug mpls ldp errors
+      debug mpls ldp messages recv
+      debug mpls ldp messages sent
+      debug mpls ldp discovery hello recv

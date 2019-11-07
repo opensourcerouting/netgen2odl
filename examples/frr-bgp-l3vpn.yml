@@ -1,0 +1,328 @@
+#         +---------+                                                 +---------+
+#         |         |                                                 |         |
+#         |   CE1   |                                                 |   CE2   |
+#         |         |                                                 |         |
+#         +---------+                                                 +---------+
+#      ce1-eth0|                                                           |ce2-eth0
+#              |                                                           |
+# 172.16.1.0/24|                                                           |172.16.2.0/24
+#              |                                                           |
+#      rt1-eth0|         10.0.1.0/24                   10.0.3.0/24         |rt3-eth0
+#         +---------+                   +---------+                   +---------+
+#         |         |rt1-eth1   rt2-eth0|         |rt2-eth2   rt3-eth1|         |
+#         |   RT1   +-------------------+   RT2   +-------------------+   RT3   |
+#         | 1.1.1.1 +-------------------+ 2.2.2.2 +-------------------+ 3.3.3.3 |
+#         |         |rt1-eth2   rt2-eth1|         |rt2-eth3   rt3-eth2|         |
+#         +---------+                   +---------+                   +---------+
+#                        10.0.2.0/24                   10.0.4.0/24
+
+---
+
+routers:
+
+  ce1:
+    links:
+      ce1-eth0:
+        peer: [rt1, rt1-eth0]
+        ipv4: 172.16.1.1/24
+    frr:
+      zebra:
+        config: |
+      staticd:
+        delay: 1
+        config: |
+          ip route 0.0.0.0/0 172.16.1.10
+
+  ce2:
+    links:
+      ce2-eth0:
+        peer: [rt3, rt3-eth0]
+        ipv4: 172.16.2.1/24
+    frr:
+      zebra:
+        config: |
+      staticd:
+        delay: 1
+        config: |
+          ip route 0.0.0.0/0 172.16.2.10
+
+  rt1:
+    links:
+      rt1-RED:
+        type: vrf
+        table: 10
+      rt1-lo1:
+        ipv4: 1.1.1.1/32
+      rt1-eth0:
+        vrf: rt1-RED
+        peer: [ce1, ce1-eth0]
+        ipv4: 172.16.1.10/24
+      rt1-eth1:
+        peer: [rt2, rt2-eth0]
+        mpls: yes
+        ipv4: 10.0.1.1/24
+      rt1-eth2:
+        peer: [rt2, rt2-eth1]
+        mpls: yes
+        ipv4: 10.0.2.1/24
+    frr:
+      zebra:
+        config: |
+          interface rt1-eth0
+           no link-detect
+          !
+          interface rt1-eth1
+           no link-detect
+          !
+          interface rt1-eth2
+           no link-detect
+          !
+      ospfd:
+        config: |
+          interface rt1-eth1
+           ip ospf hello-interval 1
+           ip ospf dead-interval 3
+          !
+          interface rt1-eth2
+           ip ospf hello-interval 1
+           ip ospf dead-interval 3
+          !
+          router ospf
+           router-id 1.1.1.1
+           network 0.0.0.0/0 area 0
+          !
+      ldpd:
+        run: yes
+        config: |
+          mpls ldp
+           router-id 1.1.1.1
+           !
+           address-family ipv4
+            discovery transport-address 1.1.1.1
+            label local allocate host-routes
+            !
+            interface rt1-eth1
+            !
+            interface rt1-eth2
+            !
+           !
+          !
+      bgpd:
+        delay: 2
+        config: |
+          router bgp 1
+           neighbor 3.3.3.3 remote-as 1
+           neighbor 3.3.3.3 update-source rt1-lo1
+           !
+           address-family ipv4 vpn
+            neighbor 3.3.3.3 activate
+           exit-address-family
+           !
+          !
+          router bgp 1 vrf rt1-RED
+           !bgp disable-ebgp-connected-route-check
+           address-family ipv4 unicast
+            rd vpn export 1:1
+            !label vpn export 500
+            label vpn export auto
+            rt vpn both 1:1
+            redistribute connected
+            import vpn
+            export vpn
+           exit-address-family
+          !
+
+  rt2:
+    links:
+      rt2-lo1:
+        ipv4: 2.2.2.2/32
+      rt2-eth0:
+        peer: [rt1, rt1-eth1]
+        mpls: yes
+        ipv4: 10.0.1.2/24
+      rt2-eth1:
+        peer: [rt1, rt1-eth2]
+        mpls: yes
+        ipv4: 10.0.2.2/24
+      rt2-eth2:
+        peer: [rt3, rt3-eth1]
+        mpls: yes
+        ipv4: 10.0.3.2/24
+      rt2-eth3:
+        peer: [rt3, rt3-eth2]
+        mpls: yes
+        ipv4: 10.0.4.2/24
+    frr:
+      zebra:
+        config: |
+          interface rt2-eth0
+           no link-detect
+          !
+          interface rt2-eth1
+           no link-detect
+          !
+          interface rt2-eth2
+           no link-detect
+          !
+          interface rt2-eth3
+           no link-detect
+          !
+      ospfd:
+        config: |
+          interface rt2-eth0
+           ip ospf hello-interval 1
+           ip ospf dead-interval 3
+          !
+          interface rt2-eth1
+           ip ospf hello-interval 1
+           ip ospf dead-interval 3
+          !
+          interface rt2-eth2
+           ip ospf hello-interval 1
+           ip ospf dead-interval 3
+          !
+          interface rt2-eth3
+           ip ospf hello-interval 1
+           ip ospf dead-interval 3
+          !
+          router ospf
+           router-id 2.2.2.2
+           network 0.0.0.0/0 area 0
+          !
+      ldpd:
+        run: yes
+        config: |
+          mpls ldp
+           router-id 2.2.2.2
+           !
+           address-family ipv4
+            discovery transport-address 2.2.2.2
+            label local allocate host-routes
+            !
+            interface rt2-eth0
+            !
+            interface rt2-eth1
+            !
+            interface rt2-eth2
+            !
+            interface rt2-eth3
+            !
+           !
+          !
+
+  rt3:
+    links:
+      rt3-RED:
+        type: vrf
+        table: 10
+      rt3-lo1:
+        ipv4: 3.3.3.3/32
+      rt3-eth0:
+        vrf: rt3-RED
+        peer: [ce2, ce2-eth0]
+        ipv4: 172.16.2.10/24
+      rt3-eth1:
+        peer: [rt2, rt2-eth2]
+        mpls: yes
+        ipv4: 10.0.3.3/24
+      rt3-eth2:
+        peer: [rt2, rt2-eth3]
+        mpls: yes
+        ipv4: 10.0.4.3/24
+    frr:
+      zebra:
+        config: |
+          interface rt3-eth0
+           no link-detect
+          !
+          interface rt3-eth1
+           no link-detect
+          !
+          interface rt3-eth2
+           no link-detect
+          !
+      ospfd:
+        config: |
+          interface rt3-eth1
+           ip ospf hello-interval 1
+           ip ospf dead-interval 3
+          !
+          interface rt3-eth2
+           ip ospf hello-interval 1
+           ip ospf dead-interval 3
+          !
+          router ospf
+           router-id 3.3.3.3
+           network 0.0.0.0/0 area 0
+          !
+      ldpd:
+        run: yes
+        config: |
+          mpls ldp
+           router-id 3.3.3.3
+           !
+           address-family ipv4
+            discovery transport-address 3.3.3.3
+            label local allocate host-routes
+            !
+            interface rt3-eth1
+            !
+            interface rt3-eth2
+            !
+           !
+          !
+      bgpd:
+        delay: 2
+        config: |
+          router bgp 1
+           neighbor 1.1.1.1 remote-as 1
+           neighbor 1.1.1.1 update-source rt3-lo1
+           !
+           address-family ipv4 vpn
+            neighbor 1.1.1.1 activate
+           exit-address-family
+           !
+          !
+          router bgp 1 vrf rt3-RED
+           !bgp disable-ebgp-connected-route-check
+           address-family ipv4 unicast
+            rd vpn export 1:1
+            !label vpn export 500
+            label vpn export auto
+            rt vpn both 1:1
+            redistribute connected
+            import vpn
+            export vpn
+           exit-address-family
+          !
+
+switches:
+
+frr:
+  base-configs:
+    all: |
+      hostname %(node)-%(daemon)
+      password 1
+      log file %(logdir)/%(node)-%(daemon).log
+      log commands
+    zebra: |
+      !debug zebra kernel
+      !debug zebra rib detailed
+      debug zebra rib
+      debug zebra nht
+      debug zebra pseudowires
+      debug zebra packet
+    ospfd: |
+      debug ospf zebra
+    ldpd: |
+      debug mpls ldp zebra
+      debug mpls ldp event
+      debug mpls ldp errors
+      debug mpls ldp messages recv
+      debug mpls ldp messages sent
+      debug mpls ldp discovery hello recv
+    bgpd: |
+      debug bgp zebra
+      debug bgp nht
+      debug bgp update in
+      debug bgp neighbor-events
