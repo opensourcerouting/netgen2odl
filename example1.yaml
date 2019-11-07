@@ -1,0 +1,406 @@
+#
+#                             +---------+
+#                             |         |
+#                         xge4|   RT1   |xge2
+#            +----------------+ 7.0.0.1 +----------------+
+#            |                |         |                |
+# 14.0.0.0/24|                +---------+                |12.0.0.0/24
+#            |              xge3-1| |xge3-2              |
+#            |                    | |                    |
+#            |        31.0.0.0/24 | |13.0.0.0/24         |
+#            |                    | |                    |
+#        xge1|              xge1-1| |xge1-2              |xge1
+#       +---------+           +---------+           +---------+
+#       |         |34.0.0.0/24|         |           |         |
+#       |   RT4   +-----------+   RT3   |           |   RT2   |
+#       | 7.0.0.4 |xge3   xge4| 7.0.0.3 |           | 7.0.0.2 |
+#       |         |           |         |           |         |
+#       +---------+           +---------+           +---------+
+#                                  |xge5                 |xge5
+#                                  |                     |
+#                                  |35.0.0.0/24          |
+#                                  |                     |
+#                                  |xge3                 |
+#                             +---------+                |
+#                             |         |                |25.0.0.0/24
+#                             |   RT5   |                |
+#                             | 7.0.0.5 +----------------+
+#                             |         |xge2
+#                             +---------+
+#                                  |xge6
+#                                  |
+#                                  |56.0.0.0/24
+#                                  |
+#                                  |xge5
+#                             +---------+
+#                             |         |
+#                             |   RT6   |
+#                             | 7.0.0.6 |
+#                             |         |
+#                             +---------+
+#
+
+---
+
+routers:
+
+  rt1:
+    links:
+      lo:
+        ipv4: 7.0.0.1/32
+        ipv6: 2001:db8:1000::1/128
+        mpls: yes
+      xge4:
+        peer: [rt4, xge1]
+        ipv4: 14.0.0.1/24
+        mpls: yes
+      xge3-1:
+        peer: [rt3, xge1-1]
+        ipv4: 31.0.0.1/24
+        mpls: yes
+      xge3-2:
+        peer: [rt3, xge1-2]
+        ipv4: 13.0.0.1/24
+        mpls: yes
+      xge2:
+        peer: [rt2, xge1]
+        ipv4: 12.0.0.1/24
+        mpls: yes
+    frr:
+      zebra:
+        run: yes
+        config: |
+      isisd:
+        run: yes
+        config: |
+          interface lo
+           ip router isis 1
+           ipv6 router isis 1
+           isis passive
+          !
+          interface xge4
+           ip router isis 1
+           ipv6 router isis 1
+           isis network point-to-point
+           isis hello-multiplier 3
+          !
+          interface xge3-1
+           ip router isis 1
+           ipv6 router isis 1
+           isis network point-to-point
+           isis hello-multiplier 3
+          !
+          interface xge3-2
+           ip router isis 1
+           ipv6 router isis 1
+           isis network point-to-point
+           isis hello-multiplier 3
+          !
+          interface xge2
+           ip router isis 1
+           ipv6 router isis 1
+           isis network point-to-point
+           isis hello-multiplier 3
+          !
+          router isis 1
+           net 49.0000.0000.0000.0001.00
+           is-type level-1
+           topology ipv6-unicast
+           lsp-gen-interval 5
+           segment-routing on
+           segment-routing global-block 16000 23999
+           segment-routing node-msd 8
+           segment-routing prefix 7.0.0.1/32 index 10 no-php-flag
+           segment-routing prefix 2001:db8:1000::1/128 index 11 no-php-flag
+          !
+
+  rt2:
+    links:
+      lo:
+        ipv4: 7.0.0.2/32
+        ipv6: 2001:db8:1000::2/128
+        mpls: yes
+      xge1:
+        peer: [rt1, xge2]
+        ipv4: 12.0.0.2/24
+        mpls: yes
+      xge5:
+        peer: [rt5, xge2]
+        ipv4: 25.0.0.2/24
+        mpls: yes
+    frr:
+      zebra:
+        run: yes
+        config: |
+      isisd:
+        run: yes
+        config: |
+          interface lo
+           ip router isis 1
+           ipv6 router isis 1
+           isis passive
+          !
+          interface xge1
+           ip router isis 1
+           ipv6 router isis 1
+           isis network point-to-point
+           isis hello-multiplier 3
+          !
+          interface xge5
+           ip router isis 1
+           ipv6 router isis 1
+           isis network point-to-point
+           isis hello-multiplier 3
+          !
+          router isis 1
+           net 49.0000.0000.0000.0002.00
+           is-type level-1
+           topology ipv6-unicast
+           lsp-gen-interval 5
+           lsp-refresh-interval 60
+           segment-routing on
+           segment-routing global-block 16000 23999
+           segment-routing node-msd 8
+           segment-routing prefix 7.0.0.2/32 index 20 no-php-flag
+           segment-routing prefix 2001:db8:1000::2/128 index 21 no-php-flag
+          !
+
+  rt3:
+    links:
+      lo:
+        ipv4: 7.0.0.3/32
+        ipv6: 2001:db8:1000::3/128
+        mpls: yes
+      xge1-1:
+        peer: [rt1, xge3-1]
+        ipv4: 31.0.0.3/24
+        mpls: yes
+      xge1-2:
+        peer: [rt1, xge3-2]
+        ipv4: 13.0.0.3/24
+        mpls: yes
+      xge4:
+        peer: [rt4, xge3]
+        ipv4: 34.0.0.3/24
+        mpls: yes
+      xge5:
+        peer: [rt5, xge3]
+        ipv4: 35.0.0.3/24
+        mpls: yes
+    frr:
+      zebra:
+        run: yes
+        config: |
+      isisd:
+        run: yes
+        config: |
+          interface lo
+           ip router isis 1
+           ipv6 router isis 1
+           isis passive
+          !
+          interface xge1-1
+           ip router isis 1
+           ipv6 router isis 1
+           isis network point-to-point
+           isis hello-multiplier 3
+          !
+          interface xge1-2
+           ip router isis 1
+           ipv6 router isis 1
+           isis network point-to-point
+           isis hello-multiplier 3
+          !
+          interface xge4
+           ip router isis 1
+           ipv6 router isis 1
+           isis network point-to-point
+           isis hello-multiplier 3
+          !
+          interface xge5
+           ip router isis 1
+           ipv6 router isis 1
+           isis network point-to-point
+           isis hello-multiplier 3
+          !
+          router isis 1
+           net 49.0000.0000.0000.0003.00
+           is-type level-1
+           topology ipv6-unicast
+           lsp-gen-interval 5
+           segment-routing on
+           segment-routing global-block 17000 24999
+           segment-routing node-msd 8
+           segment-routing prefix 7.0.0.3/32 index 30 no-php-flag
+           segment-routing prefix 2001:db8:1000::3/128 index 31 no-php-flag
+          !
+
+  rt4:
+    links:
+      lo:
+        ipv4: 7.0.0.4/32
+        ipv6: 2001:db8:1000::4/128
+        mpls: yes
+      xge1:
+        peer: [rt1, xge4]
+        ipv4: 14.0.0.4/24
+        mpls: yes
+      xge3:
+        peer: [rt3, xge4]
+        ipv4: 34.0.0.4/24
+        mpls: yes
+    frr:
+      zebra:
+        run: yes
+        config: |
+      isisd:
+        run: yes
+        config: |
+          interface lo
+           ip router isis 1
+           ipv6 router isis 1
+           isis passive
+          !
+          interface xge1
+           ip router isis 1
+           ipv6 router isis 1
+           isis network point-to-point
+           isis hello-multiplier 3
+          !
+          interface xge3
+           ip router isis 1
+           ipv6 router isis 1
+           isis network point-to-point
+           isis hello-multiplier 3
+          !
+          router isis 1
+           net 49.0000.0000.0000.0004.00
+           is-type level-1
+           topology ipv6-unicast
+           lsp-gen-interval 5
+           segment-routing on
+           segment-routing global-block 16000 23999
+           segment-routing node-msd 8
+           segment-routing prefix 7.0.0.4/32 index 40 no-php-flag
+           segment-routing prefix 2001:db8:1000::4/128 index 41 no-php-flag
+          !
+
+  rt5:
+    links:
+      lo:
+        ipv4: 7.0.0.5/32
+        ipv6: 2001:db8:1000::5/128
+        mpls: yes
+      xge3:
+        peer: [rt3, xge5]
+        ipv4: 35.0.0.5/24
+        mpls: yes
+      xge2:
+        peer: [rt2, xge5]
+        ipv4: 25.0.0.5/24
+        mpls: yes
+      xge6:
+        peer: [rt6, xge5]
+        ipv4: 56.0.0.5/24
+        mpls: yes
+    frr:
+      zebra:
+        run: yes
+        config: |
+      isisd:
+        run: yes
+        config: |
+          interface lo
+           ip router isis 1
+           ipv6 router isis 1
+           isis passive
+          !
+          interface xge3
+           ip router isis 1
+           ipv6 router isis 1
+           isis network point-to-point
+           isis hello-multiplier 3
+          !
+          interface xge2
+           ip router isis 1
+           ipv6 router isis 1
+           isis network point-to-point
+           isis hello-multiplier 3
+          !
+          interface xge6
+           ip router isis 1
+           ipv6 router isis 1
+           isis network point-to-point
+           isis hello-multiplier 3
+          !
+          router isis 1
+           net 49.0000.0000.0000.0005.00
+           is-type level-1
+           topology ipv6-unicast
+           lsp-gen-interval 5
+           segment-routing on
+           segment-routing global-block 16000 23999
+           segment-routing node-msd 8
+           segment-routing prefix 7.0.0.5/32 index 50 no-php-flag
+           segment-routing prefix 2001:db8:1000::5/128 index 51 no-php-flag
+          !
+
+  rt6:
+    links:
+      lo:
+        ipv4: 7.0.0.6/32
+        ipv6: 2001:db8:1000::6/128
+        mpls: yes
+      xge5:
+        peer: [rt5, xge6]
+        ipv4: 56.0.0.6/24
+        mpls: yes
+    frr:
+      zebra:
+        run: yes
+        config: |
+      isisd:
+        run: yes
+        config: |
+          interface lo
+           ip router isis 1
+           ipv6 router isis 1
+           isis passive
+          !
+          interface xge5
+           ip router isis 1
+           ipv6 router isis 1
+           isis network point-to-point
+           isis hello-multiplier 3
+          !
+          router isis 1
+           net 49.0000.0000.0000.0006.00
+           is-type level-1
+           topology ipv6-unicast
+           lsp-gen-interval 5
+           segment-routing on
+           segment-routing global-block 16000 23999
+           segment-routing node-msd 8
+           segment-routing prefix 7.0.0.6/32 index 60 no-php-flag
+           segment-routing prefix 2001:db8:1000::6/128 index 61 no-php-flag
+          !
+
+switches:
+
+frr:
+  #valgrind: yes
+  base-configs:
+    all: |
+      hostname %(node)
+      password 1
+      log file %(logdir)/%(node)-%(daemon).log
+    zebra: |
+      debug zebra kernel
+      debug zebra packet
+      debug zebra mpls
+    isisd: |
+      debug isis events
+      debug isis route-events
+      debug isis spf-events
+      debug isis sr-events
+      debug isis lsp-gen

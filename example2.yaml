@@ -1,0 +1,860 @@
+#
+#  +-------+                                                         +-------+
+#  |       |                                                         |       |
+#  |  CE1  |                                                         |  CE2  |
+#  |       |                                                         |       |
+#  +---+---+                                                         +---+---+
+#      |                                                                 |
+#      |                                                                 |
+#      |fd00:10:0::/64                                     fd00:20:0::/64|
+#      |                                                                 |
+#      |                                                                 |
+#  +---+---+             +-------+             +-------+             +---+---+
+#  |       |             |       |             |       |             |       |
+#  |  R11  +-------------+  R12  +-------------+  R13  +-------------+  R14  |
+#  |       |             |       |             |       |             |       |
+#  +---+---+             +--+-+--+             +--+-+--+             +---+---+
+#      |                    | |                   | |                    |
+#      |                    | |                   | |                    |
+#      +---------+ +--------+ +--------+ +--------+ +--------+ +---------+
+#                | |                   | |                   | |
+#                | |                   | |                   | |
+#             +--+-+--+             +--+-+--+             +--+-+--+
+#             |       |             |       |             |       |
+#             |  R21  +-------------+  R22  +-------------+  R23  |
+#             |       |             |       |             |       |
+#             +--+-+--+             +--+-+--+             +--+-+--+
+#                | |                   | |                   | |
+#                | |                   | |                   | |
+#      +---------+ +--------+ +--------+ +--------+ +--------+ +---------+
+#      |                    | |                   | |                    |
+#      |                    | |                   | |                    |
+#  +---+---+             +--+-+--+             +--+-+--+             +---+---+
+#  |       |             |       |             |       |             |       |
+#  |  R31  +-------------+  R32  +-------------+  R33  +-------------+  R34  |
+#  |       |             |       |             |       |             |       |
+#  +---+---+             +-------+             +-------+             +---+---+
+#      |                                                                 |
+#      |                                                                 |
+#      |fd00:30:0::/64                                     fd00:40:0::/64|
+#      |                                                                 |
+#      |                                                                 |
+#  +---+---+                                                         +---+---+
+#  |       |                                                         |       |
+#  |  CE3  |                                                         |  CE4  |
+#  |       |                                                         |       |
+#  +-------+                                                         +-------+
+#
+
+---
+
+routers:
+
+  ce1:
+    links:
+      eth-rt11:
+        peer: [rt11, eth-ce1]
+        ipv6: fd00:10:0::100/64
+    frr:
+      zebra:
+        config: |
+      staticd:
+        delay: 2
+        config: |
+          ipv6 route ::/0 fd00:10:0::11
+
+  ce2:
+    links:
+      eth-rt11:
+        peer: [rt14, eth-ce2]
+        ipv6: fd00:20:0::100/64
+    frr:
+      zebra:
+        config: |
+      staticd:
+        delay: 2
+        config: |
+          ipv6 route ::/0 fd00:20:0::14
+
+  ce3:
+    links:
+      eth-rt31:
+        peer: [rt31, eth-ce3]
+        ipv6: fd00:30:0::100/64
+    frr:
+      zebra:
+        config: |
+      staticd:
+        delay: 2
+        config: |
+          ipv6 route ::/0 fd00:30:0::31
+
+  ce4:
+    links:
+      eth-rt34:
+        peer: [rt34, eth-ce4]
+        ipv6: fd00:40:0::100/64
+    frr:
+      zebra:
+        config: |
+      staticd:
+        delay: 2
+        config: |
+          ipv6 route ::/0 fd00:40:0::34
+
+  rt11:
+    links:
+      vrf-RED:
+        type: vrf
+        table: 10
+      lo:
+        ipv4: 10.0.0.11/32
+        ipv6: 5000::11/128
+        mpls: yes
+      eth-ce1:
+        vrf: vrf-RED
+        peer: [ce1, eth-rt11]
+        ipv6: fd00:10:0::11/64
+      eth-rt12:
+        peer: [rt12, eth-rt11]
+        mpls: yes
+      eth-rt21:
+        peer: [rt21, eth-rt11]
+        mpls: yes
+    frr:
+      zebra:
+        config: |
+      isisd:
+        config: |
+          interface lo
+           ipv6 router isis 1
+          !
+          interface eth-rt12
+           ipv6 router isis 1
+           isis network point-to-point
+           isis hello-interval 3
+          !
+          interface eth-rt21
+           ipv6 router isis 1
+           isis network point-to-point
+           isis hello-interval 3
+          !
+          router isis 1
+           net 49.0000.0000.0000.0011.00
+           is-type level-1
+           topology ipv6-unicast
+           segment-routing on
+           segment-routing global-block 16000 23999
+           segment-routing node-msd 8
+           segment-routing prefix 5000::11/128 index 11 no-php-flag
+          !
+      bgpd:
+        delay: 2
+        config: |
+          router bgp 1
+           bgp router-id 10.0.0.11
+           neighbor 5000::22 remote-as 1
+           neighbor 5000::22 update-source lo
+           !
+           address-family ipv6 vpn
+            neighbor 5000::22 activate
+           exit-address-family
+           !
+          !
+          router bgp 1 vrf vrf-RED
+           address-family ipv6 unicast
+            rd vpn export 1:1
+            rt vpn both 1:1
+            label vpn export 500
+            redistribute connected
+            import vpn
+            export vpn
+           exit-address-family
+           !
+          !
+
+  rt12:
+    links:
+      lo:
+        ipv4: 10.0.0.12/32
+        ipv6: 5000::12/128
+        mpls: yes
+      eth-rt11:
+        peer: [rt11, eth-rt12]
+        mpls: yes
+      eth-rt13:
+        peer: [rt13, eth-rt12]
+        mpls: yes
+      eth-rt21:
+        peer: [rt21, eth-rt12]
+        mpls: yes
+      eth-rt22:
+        peer: [rt22, eth-rt12]
+        mpls: yes
+    frr:
+      zebra:
+        config: |
+      isisd:
+        config: |
+          interface lo
+           ipv6 router isis 1
+          !
+          interface eth-rt11
+           ipv6 router isis 1
+           isis network point-to-point
+           isis hello-interval 3
+          !
+          interface eth-rt13
+           ipv6 router isis 1
+           isis network point-to-point
+           isis hello-interval 3
+          !
+          interface eth-rt21
+           ipv6 router isis 1
+           isis network point-to-point
+           isis hello-interval 3
+          !
+          interface eth-rt22
+           ipv6 router isis 1
+           isis network point-to-point
+           isis hello-interval 3
+          !
+          router isis 1
+           net 49.0000.0000.0000.0012.00
+           is-type level-1
+           topology ipv6-unicast
+           segment-routing on
+           segment-routing global-block 16000 23999
+           segment-routing node-msd 8
+           segment-routing prefix 5000::12/128 index 12 no-php-flag
+          !
+
+  rt13:
+    links:
+      lo:
+        ipv4: 10.0.0.13/32
+        ipv6: 5000::13/128
+        mpls: yes
+      eth-rt12:
+        peer: [rt12, eth-rt13]
+        mpls: yes
+      eth-rt14:
+        peer: [rt14, eth-rt13]
+        mpls: yes
+      eth-rt22:
+        peer: [rt22, eth-rt13]
+        mpls: yes
+      eth-rt23:
+        peer: [rt23, eth-rt13]
+        mpls: yes
+    frr:
+      zebra:
+        config: |
+      isisd:
+        config: |
+          interface lo
+           ipv6 router isis 1
+          !
+          interface eth-rt12
+           ipv6 router isis 1
+           isis network point-to-point
+           isis hello-interval 3
+          !
+          interface eth-rt14
+           ipv6 router isis 1
+           isis network point-to-point
+           isis hello-interval 3
+          !
+          interface eth-rt22
+           ipv6 router isis 1
+           isis network point-to-point
+           isis hello-interval 3
+          !
+          interface eth-rt23
+           ipv6 router isis 1
+           isis network point-to-point
+           isis hello-interval 3
+          !
+          router isis 1
+           net 49.0000.0000.0000.0013.00
+           is-type level-1
+           topology ipv6-unicast
+           segment-routing on
+           segment-routing global-block 16000 23999
+           segment-routing node-msd 8
+           segment-routing prefix 5000::13/128 index 13 no-php-flag
+          !
+
+  rt14:
+    links:
+      vrf-RED:
+        type: vrf
+        table: 10
+      lo:
+        ipv4: 10.0.0.14/32
+        ipv6: 5000::14/128
+        mpls: yes
+      eth-ce2:
+        vrf: vrf-RED
+        peer: [ce2, eth-rt14]
+        ipv6: fd00:20:0::14/64
+      eth-rt13:
+        peer: [rt13, eth-rt14]
+        mpls: yes
+      eth-rt23:
+        peer: [rt23, eth-rt14]
+        mpls: yes
+    frr:
+      zebra:
+        config: |
+      isisd:
+        config: |
+          interface lo
+           ipv6 router isis 1
+          !
+          interface eth-rt13
+           ipv6 router isis 1
+           isis network point-to-point
+           isis hello-interval 3
+          !
+          interface eth-rt23
+           ipv6 router isis 1
+           isis network point-to-point
+           isis hello-interval 3
+          !
+          router isis 1
+           net 49.0000.0000.0000.0014.00
+           is-type level-1
+           topology ipv6-unicast
+           segment-routing on
+           segment-routing global-block 16000 23999
+           segment-routing node-msd 8
+           segment-routing prefix 5000::14/128 index 14 no-php-flag
+          !
+      bgpd:
+        delay: 2
+        config: |
+          router bgp 1
+           bgp router-id 10.0.0.14
+           neighbor 5000::22 remote-as 1
+           neighbor 5000::22 update-source lo
+           !
+           address-family ipv6 vpn
+            neighbor 5000::22 activate
+           exit-address-family
+           !
+          !
+          router bgp 1 vrf vrf-RED
+           address-family ipv6 unicast
+            rd vpn export 1:1
+            rt vpn both 1:1
+            label vpn export 501
+            redistribute connected
+            import vpn
+            export vpn
+           exit-address-family
+           !
+          !
+
+  rt21:
+    links:
+      lo:
+        ipv4: 10.0.0.21/32
+        ipv6: 5000::21/128
+        mpls: yes
+      eth-rt11:
+        peer: [rt11, eth-rt21]
+        mpls: yes
+      eth-rt12:
+        peer: [rt12, eth-rt21]
+        mpls: yes
+      eth-rt22:
+        peer: [rt22, eth-rt21]
+        mpls: yes
+      eth-rt31:
+        peer: [rt31, eth-rt21]
+        mpls: yes
+      eth-rt32:
+        peer: [rt32, eth-rt21]
+        mpls: yes
+    frr:
+      zebra:
+        config: |
+      isisd:
+        config: |
+          interface lo
+           ipv6 router isis 1
+          !
+          interface eth-rt11
+           ipv6 router isis 1
+           isis network point-to-point
+           isis hello-interval 3
+          !
+          interface eth-rt12
+           ipv6 router isis 1
+           isis network point-to-point
+           isis hello-interval 3
+          !
+          interface eth-rt22
+           ipv6 router isis 1
+           isis network point-to-point
+           isis hello-interval 3
+          !
+          interface eth-rt31
+           ipv6 router isis 1
+           isis network point-to-point
+           isis hello-interval 3
+          !
+          interface eth-rt32
+           ipv6 router isis 1
+           isis network point-to-point
+           isis hello-interval 3
+          !
+          router isis 1
+           net 49.0000.0000.0000.0021.00
+           is-type level-1
+           topology ipv6-unicast
+           segment-routing on
+           segment-routing global-block 16000 23999
+           segment-routing node-msd 8
+           segment-routing prefix 5000::21/128 index 21 no-php-flag
+          !
+
+  rt22:
+    links:
+      lo:
+        ipv4: 10.0.0.22/32
+        ipv6: 5000::22/128
+        mpls: yes
+      eth-rt12:
+        peer: [rt12, eth-rt22]
+        mpls: yes
+      eth-rt13:
+        peer: [rt13, eth-rt22]
+        mpls: yes
+      eth-rt21:
+        peer: [rt21, eth-rt22]
+        mpls: yes
+      eth-rt23:
+        peer: [rt23, eth-rt22]
+        mpls: yes
+      eth-rt32:
+        peer: [rt32, eth-rt22]
+        mpls: yes
+      eth-rt33:
+        peer: [rt33, eth-rt22]
+        mpls: yes
+    frr:
+      zebra:
+        config: |
+      isisd:
+        config: |
+          interface lo
+           ipv6 router isis 1
+          !
+          interface eth-rt12
+           ipv6 router isis 1
+           isis network point-to-point
+           isis hello-interval 3
+          !
+          interface eth-rt13
+           ipv6 router isis 1
+           isis network point-to-point
+           isis hello-interval 3
+          !
+          interface eth-rt21
+           ipv6 router isis 1
+           isis network point-to-point
+           isis hello-interval 3
+          !
+          interface eth-rt23
+           ipv6 router isis 1
+           isis network point-to-point
+           isis hello-interval 3
+          !
+          interface eth-rt32
+           ipv6 router isis 1
+           isis network point-to-point
+           isis hello-interval 3
+          !
+          interface eth-rt33
+           ipv6 router isis 1
+           isis network point-to-point
+           isis hello-interval 3
+          !
+          router isis 1
+           net 49.0000.0000.0000.0022.00
+           is-type level-1
+           topology ipv6-unicast
+           segment-routing on
+           segment-routing global-block 16000 23999
+           segment-routing node-msd 8
+           segment-routing prefix 5000::22/128 index 22 no-php-flag
+          !
+      bgpd:
+        delay: 2
+        config: |
+          router bgp 1
+           bgp router-id 10.0.0.22
+           neighbor 5000::11 remote-as 1
+           neighbor 5000::11 update-source lo
+           neighbor 5000::14 remote-as 1
+           neighbor 5000::14 update-source lo
+           neighbor 5000::31 remote-as 1
+           neighbor 5000::31 update-source lo
+           neighbor 5000::34 remote-as 1
+           neighbor 5000::34 update-source lo
+           !
+           address-family ipv6 vpn
+            neighbor 5000::11 activate
+            neighbor 5000::11 route-reflector-client
+            neighbor 5000::14 activate
+            neighbor 5000::14 route-reflector-client
+            neighbor 5000::31 activate
+            neighbor 5000::31 route-reflector-client
+            neighbor 5000::34 activate
+            neighbor 5000::34 route-reflector-client
+           exit-address-family
+           !
+          !
+
+  rt23:
+    links:
+      lo:
+        ipv4: 10.0.0.23/32
+        ipv6: 5000::23/128
+        mpls: yes
+      eth-rt13:
+        peer: [rt13, eth-rt23]
+        mpls: yes
+      eth-rt14:
+        peer: [rt14, eth-rt23]
+        mpls: yes
+      eth-rt22:
+        peer: [rt22, eth-rt23]
+        mpls: yes
+      eth-rt33:
+        peer: [rt33, eth-rt23]
+        mpls: yes
+      eth-rt34:
+        peer: [rt34, eth-rt23]
+        mpls: yes
+    frr:
+      zebra:
+        config: |
+      isisd:
+        config: |
+          interface lo
+           ipv6 router isis 1
+          !
+          interface eth-rt13
+           ipv6 router isis 1
+           isis network point-to-point
+           isis hello-interval 3
+          !
+          interface eth-rt14
+           ipv6 router isis 1
+           isis network point-to-point
+           isis hello-interval 3
+          !
+          interface eth-rt22
+           ipv6 router isis 1
+           isis network point-to-point
+           isis hello-interval 3
+          !
+          interface eth-rt33
+           ipv6 router isis 1
+           isis network point-to-point
+           isis hello-interval 3
+          !
+          interface eth-rt34
+           ipv6 router isis 1
+           isis network point-to-point
+           isis hello-interval 3
+          !
+          router isis 1
+           net 49.0000.0000.0000.0023.00
+           is-type level-1
+           topology ipv6-unicast
+           segment-routing on
+           segment-routing global-block 16000 23999
+           segment-routing node-msd 8
+           segment-routing prefix 5000::23/128 index 23 no-php-flag
+          !
+
+  rt31:
+    links:
+      vrf-RED:
+        type: vrf
+        table: 10
+      lo:
+        ipv4: 10.0.0.31/32
+        ipv6: 5000::31/128
+        mpls: yes
+      eth-ce3:
+        vrf: vrf-RED
+        peer: [ce3, eth-rt31]
+        ipv6: fd00:30:0::31/64
+      eth-rt21:
+        peer: [rt21, eth-rt31]
+        mpls: yes
+      eth-rt32:
+        peer: [rt32, eth-rt31]
+        mpls: yes
+    frr:
+      zebra:
+        config: |
+      isisd:
+        config: |
+          interface lo
+           ipv6 router isis 1
+          !
+          interface eth-rt21
+           ipv6 router isis 1
+           isis network point-to-point
+           isis hello-interval 3
+          !
+          interface eth-rt32
+           ipv6 router isis 1
+           isis network point-to-point
+           isis hello-interval 3
+          !
+          router isis 1
+           net 49.0000.0000.0000.0031.00
+           is-type level-1
+           topology ipv6-unicast
+           segment-routing on
+           segment-routing global-block 16000 23999
+           segment-routing node-msd 8
+           segment-routing prefix 5000::31/128 index 31 no-php-flag
+          !
+      bgpd:
+        delay: 2
+        config: |
+          router bgp 1
+           bgp router-id 10.0.0.31
+           neighbor 5000::22 remote-as 1
+           neighbor 5000::22 update-source lo
+           !
+           address-family ipv6 vpn
+            neighbor 5000::22 activate
+           exit-address-family
+           !
+          !
+          router bgp 1 vrf vrf-RED
+           address-family ipv6 unicast
+            rd vpn export 1:1
+            rt vpn both 1:1
+            label vpn export 502
+            redistribute connected
+            import vpn
+            export vpn
+           exit-address-family
+           !
+          !
+
+  rt32:
+    links:
+      lo:
+        ipv4: 10.0.0.32/32
+        ipv6: 5000::32/128
+        mpls: yes
+      eth-rt21:
+        peer: [rt21, eth-rt32]
+        mpls: yes
+      eth-rt22:
+        peer: [rt22, eth-rt32]
+        mpls: yes
+      eth-rt31:
+        peer: [rt31, eth-rt32]
+        mpls: yes
+      eth-rt33:
+        peer: [rt33, eth-rt32]
+        mpls: yes
+    frr:
+      zebra:
+        config: |
+      isisd:
+        config: |
+          interface lo
+           ipv6 router isis 1
+          !
+          interface eth-rt21
+           ipv6 router isis 1
+           isis network point-to-point
+           isis hello-interval 3
+          !
+          interface eth-rt22
+           ipv6 router isis 1
+           isis network point-to-point
+           isis hello-interval 3
+          !
+          interface eth-rt31
+           ipv6 router isis 1
+           isis network point-to-point
+           isis hello-interval 3
+          !
+          interface eth-rt33
+           ipv6 router isis 1
+           isis network point-to-point
+           isis hello-interval 3
+          !
+          router isis 1
+           net 49.0000.0000.0000.0032.00
+           is-type level-1
+           topology ipv6-unicast
+           segment-routing on
+           segment-routing global-block 16000 23999
+           segment-routing node-msd 8
+           segment-routing prefix 5000::32/128 index 32 no-php-flag
+          !
+
+  rt33:
+    links:
+      lo:
+        ipv4: 10.0.0.33/32
+        ipv6: 5000::33/128
+        mpls: yes
+      eth-rt22:
+        peer: [rt22, eth-rt33]
+        mpls: yes
+      eth-rt23:
+        peer: [rt23, eth-rt33]
+        mpls: yes
+      eth-rt32:
+        peer: [rt32, eth-rt33]
+        mpls: yes
+      eth-rt34:
+        peer: [rt34, eth-rt33]
+        mpls: yes
+    frr:
+      zebra:
+        config: |
+      isisd:
+        config: |
+          interface lo
+           ipv6 router isis 1
+          !
+          interface eth-rt22
+           ipv6 router isis 1
+           isis network point-to-point
+           isis hello-interval 3
+          !
+          interface eth-rt23
+           ipv6 router isis 1
+           isis network point-to-point
+           isis hello-interval 3
+          !
+          interface eth-rt32
+           ipv6 router isis 1
+           isis network point-to-point
+           isis hello-interval 3
+          !
+          interface eth-rt34
+           ipv6 router isis 1
+           isis network point-to-point
+           isis hello-interval 3
+          !
+          router isis 1
+           net 49.0000.0000.0000.0033.00
+           is-type level-1
+           topology ipv6-unicast
+           segment-routing on
+           segment-routing global-block 16000 23999
+           segment-routing node-msd 8
+           segment-routing prefix 5000::33/128 index 33 no-php-flag
+          !
+
+  rt34:
+    links:
+      vrf-RED:
+        type: vrf
+        table: 10
+      lo:
+        ipv4: 10.0.0.34/32
+        ipv6: 5000::34/128
+        mpls: yes
+      eth-ce4:
+        vrf: vrf-RED
+        peer: [ce4, eth-rt34]
+        ipv6: fd00:40:0::34/64
+      eth-rt23:
+        peer: [rt23, eth-rt34]
+        mpls: yes
+      eth-rt33:
+        peer: [rt33, eth-rt34]
+        mpls: yes
+    frr:
+      zebra:
+        config: |
+      isisd:
+        config: |
+          interface lo
+           ipv6 router isis 1
+          !
+          interface eth-rt23
+           ipv6 router isis 1
+           isis network point-to-point
+           isis hello-interval 3
+          !
+          interface eth-rt33
+           ipv6 router isis 1
+           isis network point-to-point
+           isis hello-interval 3
+          !
+          router isis 1
+           net 49.0000.0000.0000.0034.00
+           is-type level-1
+           topology ipv6-unicast
+           segment-routing on
+           segment-routing global-block 16000 23999
+           segment-routing node-msd 8
+           segment-routing prefix 5000::34/128 index 34 no-php-flag
+          !
+      bgpd:
+        delay: 2
+        config: |
+          router bgp 1
+           bgp router-id 10.0.0.34
+           neighbor 5000::22 remote-as 1
+           neighbor 5000::22 update-source lo
+           !
+           address-family ipv6 vpn
+            neighbor 5000::22 activate
+           exit-address-family
+           !
+          !
+          router bgp 1 vrf vrf-RED
+           address-family ipv6 unicast
+            rd vpn export 1:1
+            rt vpn both 1:1
+            label vpn export 503
+            redistribute connected
+            import vpn
+            export vpn
+           exit-address-family
+          !
+
+switches:
+
+frr:
+  base-configs:
+    all: |
+      hostname %(node)-%(daemon)
+      password 1
+      log file %(logdir)/%(node)-%(daemon).log
+      log commands
+    zebra: |
+      debug zebra kernel
+      debug zebra packet
+    isisd: |
+      debug isis events
+      debug isis route-events
+      debug isis spf-events
+      debug isis sr-events
+      debug isis lsp-gen
+    bgpd: |
+      debug bgp zebra
+      debug bgp nht
+      debug bgp update in
+      debug bgp neighbor-events
