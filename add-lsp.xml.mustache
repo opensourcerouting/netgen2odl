@@ -1,6 +1,6 @@
 <input xmlns="urn:opendaylight:params:xml:ns:yang:topology:pcep">
-   <node>pcc://43.43.43.43</node>
-   <name>update-tunel</name>
+   <node>pcc://{{pccip}}</node>
+   <name>{{pathname}}</name>
       <arguments>
          <lsp xmlns="urn:opendaylight:params:xml:ns:yang:pcep:ietf:stateful">
             <delegate>true</delegate>
@@ -8,19 +8,19 @@
          </lsp>
          <endpoints-obj>
             <ipv4>
-               <source-ipv4-address>43.43.43.43</source-ipv4-address>
-               <destination-ipv4-address>39.39.39.39</destination-ipv4-address>
+               <source-ipv4-address>127.0.0.1</source-ipv4-address>
+               <destination-ipv4-address>40.40.40.40</destination-ipv4-address>
             </ipv4>
          </endpoints-obj>
          <ero>
-         {{#hop}}
+{{#hop}}
             <subobject>
                <loose>false</loose>
                <ip-prefix>
                   <ip-prefix>{{network}}</ip-prefix>
                </ip-prefix>
             </subobject>
-            {{/hop}}
+{{/hop}}
          </ero>
       </arguments>
    <network-topology-ref xmlns:topo="urn:TBD:params:xml:ns:yang:network-topology">/topo:network-topology/topo:topology[topo:topology-id="pcep-topology"]</network-topology-ref>

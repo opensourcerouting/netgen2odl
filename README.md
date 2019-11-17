@@ -16,8 +16,9 @@ Usage Example
 Todo
 -----
 
-- Test against ODL
+- ~~Test against ODL~~
 - Test with new examples from Renato
-- Run queries against ODL
-- Graceful error when path cannot be found
+- ~~Run queries against ODL~~
+- ~~Graceful error when path cannot be found~~
 - Visualisation (current attempts with matplotlib are ugly)
+- Add switch to delete all paths
