@@ -8,17 +8,21 @@
          </lsp>
          <endpoints-obj>
             <ipv4>
-               <source-ipv4-address>127.0.0.1</source-ipv4-address>
-               <destination-ipv4-address>40.40.40.40</destination-ipv4-address>
+               <source-ipv4-address>{{source-ipv4}}</source-ipv4-address>
+               <destination-ipv4-address>{{destination-ipv4}}</destination-ipv4-address>
             </ipv4>
          </endpoints-obj>
+         <path-setup-type xmlns="urn:opendaylight:params:xml:ns:yang:pcep:ietf:stateful">
+             <pst>1</pst>
+         </path-setup-type>
          <ero>
 {{#hop}}
             <subobject>
                <loose>false</loose>
-               <ip-prefix>
-                  <ip-prefix>{{network}}</ip-prefix>
-               </ip-prefix>
+               <sid-type xmlns="urn:opendaylight:params:xml:ns:yang:pcep:segment:routing">ipv4-node-id</sid-type>
+               <m-flag xmlns="urn:opendaylight:params:xml:ns:yang:pcep:segment:routing">true</m-flag>
+               <sid xmlns="urn:opendaylight:params:xml:ns:yang:pcep:segment:routing">{{sid}}</sid>
+               <ip-address xmlns="urn:opendaylight:params:xml:ns:yang:pcep:segment:routing">{{ip}}</ip-address>
             </subobject>
 {{/hop}}
          </ero>

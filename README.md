@@ -7,6 +7,10 @@ Installation
 
 Create virtualenv and install `requirements.txt`.
 
+Help
+-----
+
+Run `python3 netgen2odl.py --help` for help.
 
 Usage Example
 -------------
