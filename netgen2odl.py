@@ -17,6 +17,8 @@ import re
 import ipaddress
 import logging
 import xml.etree.ElementTree as ET
+import http
+
 
 def parse_args():
     parser = argparse.ArgumentParser(
@@ -89,8 +91,10 @@ def build_network(yamlRouters):
     for (routername, routerdata) in yamlRouters.items():
         graph.add_node(routername)
         sid = parse_isisd_config(routerdata["frr"]["isisd"]["config"])
+        ipv4 = ""
         for (ifname, ifdata) in routerdata["links"].items():
             if ifname == "lo":
+                ipv4 = ifdata['ipv4'][:-3]
                 continue
 
             destrouter = ifdata['peer'][0]
@@ -100,7 +104,7 @@ def build_network(yamlRouters):
             graph.add_edge(routername, routername+"/"+ifname)
             # add some metadata to the interface node
             graph[routername][routername+"/"+ifname]['name'] = ifname
-            graph[routername][routername+"/"+ifname]['ipv4'] = ifdata['ipv4']
+            graph[routername][routername+"/"+ifname]['ipv4'] = ipv4 #ifdata['ipv4']
             graph[routername][routername+"/"+ifname]['sid'] = sid
             try:
                 graph[routername][routername+"/"+ifname]['ipv6'] = ifdata['ipv6']
@@ -138,7 +142,7 @@ def render_template(filename, data):
         templatestring = templatefile.read()
         parsedtemplate = pystache.parse(templatestring)
         renderer = pystache.Renderer()
-        return renderer.render(parsedtemplate, templatedata)
+        return renderer.render(parsedtemplate, data)
 
 def create_xml(pathHop, args):
     pccip = args['pcc']
@@ -162,20 +166,22 @@ def odl_request(args, apipath, xmlstring=None):
     authstring = base64.b64encode(
         bytes("%s:%s" % (odlUrlObj.username, odlUrlObj.password), "ascii")).decode("ascii")
     httpHeader = {
+        "Accept": "application/xml",
         "Content-Type": "application/xml",
         "Authorization": "Basic %s" % authstring
     }
-    enquoted_path = urllib.parse.quote_plus(apipath)
-    odlUrlObj = odlUrlObj._replace(path=enquoted_path)
+    odlUrlObj = odlUrlObj._replace(path=apipath)
     odlUrlObj = odlUrlObj._replace(netloc=odlUrlObj.hostname + ":" + str(odlUrlObj.port))
 
     urlstring = odlUrlObj.geturl()
     if xmlstring is not None:
         xmlbinary = xmlstring.encode('utf-8')
         req = urllib.request.Request(urlstring, data=xmlbinary, headers=httpHeader)
+        logging.info("Request \n" + xmlstring + "\nto\n" + urlstring)
     else:
         req = urllib.request.Request(urlstring, headers=httpHeader)
-    logging.info("Request \n"+xmlstring+"\nto\n"+urlstring)
+        logging.info("Request to " + urlstring)
+
     return req
 
 def do_add_request(args, xmlstring):
@@ -218,25 +224,36 @@ def parse_path_arg(args):
     return paths
 
 def get_all_lsp_routes(args):
+    enquoted_dest = urllib.parse.quote("pcc://" + args["pcc"], safe=":")
     req = odl_request(args,
-                      "/restconf/operational/network-topology:network-topology/\
-                      qasstopology/pcep-topology/node/pcc://"+args["pccip"])
+                      "/restconf/operational/network-topology:network-topology/topology/pcep-topology/node/"+enquoted_dest)
     with urllib.request.urlopen(req) as f:
         if f.getcode() == 200:
             res = f.read().decode("utf-8")
+#            logging.info(res)
             xml = ET.fromstring(res)
-            xml_paths = xml.findall("./path-computation-client/reported-lsp")
             paths = []
-            for xml_path in xml_paths:
-                subobjs = xml_path.findall("./ero/subobject")
-                path = []
-                for hop in subobjs:
-                    sid =  xml_path.findall("./sid")[0].text
-                    ip = xml_path.findall("./ip-address")[0].text
-                    path.append((sid, ip))
-                elem = { "name": xml_path.findall("./name")[0].text,
-                         "path": path}
-                path.append(elem)
+            #xml_paths = xml.findall("./{urn:opendaylight:params:xml:ns:yang:topology:pcep}path-computation-client/{urn:opendaylight:params:xml:ns:yang:topology:pce}reported-lsp")
+            xml_pccs = xml.findall("./{urn:opendaylight:params:xml:ns:yang:topology:pcep}path-computation-client")
+            for pcc in xml_pccs:
+                routes = pcc.findall("{urn:opendaylight:params:xml:ns:yang:topology:pcep}reported-lsp")
+                for route in routes:
+                    routename = (route.find("{urn:opendaylight:params:xml:ns:yang:topology:pcep}name").text)
+                    paths.append({"name": routename})
+                    #print(route.findall("{urn:opendaylight:params:xml:ns:yang:topology:pcep}path/{urn:opendaylight:params:xml:ns:yang:topology:pcep}ero"))
+#                    for elem in route:
+#                        print(elem)
+                    #print(ero)
+#            for xml_path in xml_paths:
+#                subobjs = xml_path.findall("./ero/subobject")
+#                path = []
+#                for hop in subobjs:
+#                    sid =  xml_path.findall("./sid")[0].text
+#                    ip = xml_path.findall("./ip-address")[0].text
+#                    path.append((sid, ip))
+#                elem = { "name": xml_path.findall("./name")[0].text,
+#                         "path": path}
+#                path.append(elem)
             return paths
         else:
             raise ODLError("API did not give a topology list")
@@ -262,23 +279,25 @@ def flush_odl(args):
                           "/restconf/operations/network-topology-pcep:remove-lsp",
                           xmlstring)
         with urllib.request.urlopen(req) as f:
-            if f.getcode() == 200:
+            if f.getcode() == 204:
                 print("Deleted " + str(route))
             else:
-                raise ODLError("Deletion failed")
+                raise ODLError("Deletion failed. HTTP " +
+                               str(f.getcode()) +
+                               f.read().decode("utf-8"))
 
 def sync_odl(args):
     """Send request to sync ODL'S LSP with the PCC"""
     xmlstring = render_template("sync-lsp.xml.mustache",
                                 {"pccip": args["pcc"]})
-    req = odl_requests(args,
+    req = odl_request(args,
                        "/restconf/operations/network-topology-pcep:trigger-sync",
                        xmlstring)
     with urllib.request.urlopen(req) as f:
         if f.getcode() == 200:
-            print("Sync request sent")
+            print("Sync request sent. HTTP " + str(f.getcode()) + f.read().decode("utf-8"))
         else:
-            raise ODLError("Sync failed")
+            raise ODLError("Sync failed. HTTP" + str(f.getcode()) + f.read().decode("utf-8"))
 
 def list_odl(args):
     '''Get all LSP routes inside ODL'''
