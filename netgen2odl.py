@@ -21,7 +21,8 @@ import xml.etree.ElementTree as ET
 def parse_args():
     parser = argparse.ArgumentParser(
         description="Takes network description in NETGEN's YAML format\
-        and creates paths in an OpenDaylight PCEP instance")
+        and creates, deletes, lists paths in an OpenDaylight PCEP instance. \
+        Also can request PCC resync.")
     subparsers = parser.add_subparsers(
         help='modeswitch',
         dest='modeswitch',
@@ -227,13 +228,13 @@ def get_all_lsp_routes(args):
             xml_paths = xml.findall("./path-computation-client/reported-lsp")
             paths = []
             for xml_path in xml_paths:
-                subobjs = xml_path.findall(."/ero/subobject")
+                subobjs = xml_path.findall("./ero/subobject")
                 path = []
                 for hop in subobjs:
                     sid =  xml_path.findall("./sid")[0].text
                     ip = xml_path.findall("./ip-address")[0].text
                     path.append((sid, ip))
-                elem = { "name": xml_path.findall("./name")[0].text
+                elem = { "name": xml_path.findall("./name")[0].text,
                          "path": path}
                 path.append(elem)
             return paths
@@ -256,13 +257,13 @@ def flush_odl(args):
         xmlstring = render_template("delete-lsp.xml.mustache",
                                     {"pccip": args["pcc"],
                                      "tunnel-name": route["name"]
-                                    }))
+                                    })
         req = odl_request(args,
                           "/restconf/operations/network-topology-pcep:remove-lsp",
                           xmlstring)
         with urllib.request.urlopen(req) as f:
             if f.getcode() == 200:
-                print("Deleted + " str(route))
+                print("Deleted " + str(route))
             else:
                 raise ODLError("Deletion failed")
 
