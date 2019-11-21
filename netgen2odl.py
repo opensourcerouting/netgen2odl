@@ -268,7 +268,16 @@ def flush_odl(args):
 
 def sync_odl(args):
     """Send request to sync ODL'S LSP with the PCC"""
-    print("Sync")
+    xmlstring = render_template("sync-lsp.xml.mustache",
+                                {"pccip": args["pcc"]})
+    req = odl_requests(args,
+                       "/restconf/operations/network-topology-pcep:trigger-sync",
+                       xmlstring)
+    with urllib.request.urlopen(req) as f:
+        if f.getcode() == 200:
+            print("Sync request sent")
+        else:
+            raise ODLError("Sync failed")
 
 def list_odl(args):
     '''Get all LSP routes inside ODL'''
