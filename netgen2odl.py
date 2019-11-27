@@ -84,13 +84,18 @@ def parse_isisd_config(config):
                 srgb_offsetv4 = int(items[5])
             elif isinstance(parsed_network, ipaddress.IPv6Network):
                 srgb_offsetv6= int(items[5])
+    if srgb_start == None:
+    	return None
     return srgb_start + srgb_offsetv4
 
 def build_network(yamlRouters):
     graph = nx.Graph()
     for (routername, routerdata) in yamlRouters.items():
         graph.add_node(routername)
-        sid = parse_isisd_config(routerdata["frr"]["isisd"]["config"])
+        if "isisd" in routerdata["frr"]:
+        	sid = parse_isisd_config(routerdata["frr"]["isisd"]["config"])
+        else:
+        	sid = None
         ipv4 = ""
         for (ifname, ifdata) in routerdata["links"].items():
             if ifname == "lo":
