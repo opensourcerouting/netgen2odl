@@ -14,6 +14,14 @@ $ source ./n2oenv/bin/activate
 $ pip install -r requirements.txt
 ```
 
+Setup
+------
+
+### ODL
+
+- Start it
+- In CLI: `feature:install webconsole odl-restconf odl-bgpcep-pcep`
+
 Help
 -----
 
