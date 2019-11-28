@@ -60,11 +60,20 @@ def parse_args():
         help="Comma seperated lists with routernames-interfacenames along\
         the desired paths, multiple possible")
 
+    updateParser = subparsers.add_parser("update", parents=[addParser], add_help=False)
+    updateParser.add_argument(
+        'pathname',
+        metavar='pathname_to_replace',
+        type=str,
+        help="The name of the path to replace"
+    )
+
     flushParser = subparsers.add_parser("flush")
 
     listParser = subparsers.add_parser("list")
 
     syncParser = subparsers.add_parser("sync")
+
 
     return vars(parser.parse_args())
 
@@ -149,15 +158,21 @@ def render_template(filename, data):
         renderer = pystache.Renderer()
         return renderer.render(parsedtemplate, data)
 
-def create_xml(pathHop, args):
+def create_xml(pathHop, args, pathname=None):
     pccip = args['pcc']
     toRequest = []
     for path in pathHop:
         templatedata = {'hop':[{'ip': hop, 'sid': sid} for hop, sid in path]}
         templatedata['pccip'] = pccip
-        templatedata['pathname'] = str(uuid.uuid4())[:8] # just a rundom 8 char word
         templatedata['source-ipv4'] = pccip # ?!?
         templatedata['destination-ipv4'] = path[-1][0] # ip of last hop?!?
+        if pathname is None:
+            templatedata['pathname'] = str(uuid.uuid4())[:8] # just a rundom 8 char word
+            toRequest.append(render_template("add-lsp.xml.mustache", templatedata))
+        else:
+            templatedata['pathname'] = pathname
+            toRequest.append(render_template("update-lsp.xml.mustache", templatedata))
+
         toRequest.append(render_template("add-lsp.xml.mustache", templatedata))
     return toRequest
 
@@ -199,11 +214,29 @@ def do_add_request(args, xmlstring):
         else:
             print(f.getcode())
             print(f.read().decode("utf-8"))
-            raise ODLError("Is this path already registered in ODL?")
+            raise ODLError("Got unexpected reply from ODL")
 
 def do_add_requests(args, xmlstrings):
     for xmlstring in xmlstrings:
         do_add_request(args, xmlstring)
+
+def do_update_request(args, xmlstring):
+    req = odl_request(args,
+                      "/restconf/operations/network-topology-pcep:update-lsp",
+                      xmlstring)
+    with urllib.request.urlopen(req) as f:
+        if f.getcode() == 204:
+            return f.read().decode("utf-8")
+        else:
+            print(f.getcode())
+            print(f.read().decode("utf-8"))
+            raise ODLError("Is this path already registered in ODL?")
+
+def do_update_requests(args, xmlstrings):
+    for xmlstring in xmlstrings:
+        do_update_request(args, xmlstring)
+
+
 
 class PathParsingError(Exception):
     """Raised when path does not follow the requirements"""
@@ -273,7 +306,7 @@ def add(args):
 def flush_odl(args):
     '''Delete all existing routes in ODL LSP database'''
     routes = get_all_lsp_routes(args)
-    print("Found " + str(len(routes)) + "in ODL")
+    print("Found " + str(len(routes)) + " in ODL")
     print("Sending deletion requests....")
     for route in routes:
         xmlstring = render_template("delete-lsp.xml.mustache",
@@ -309,12 +342,20 @@ def list_odl(args):
     routes = get_all_lsp_routes(args)
     print(routes)
 
+def update_odl(args):
+    """Update a LSP route"""
+    network = build_network(yaml.load(args['yamlfile'], Loader=yaml.Loader)['routers'])
+    hop_ips = create_path_in_network(network, parse_path_arg(args))
+    xmlstrings = create_xml(hop_ips, args, args["pathname"])
+    do_update_request(args, xmlstrings)
+
 args = parse_args()
 if args["verbose"] > 0:
     logging.basicConfig(level=logging.INFO)
 opts = {"add": add,
         "flush": flush_odl,
         "list": list_odl,
-        "sync": sync_odl}
+        "sync": sync_odl,
+        "update": update_odl}
 func = opts.get(args["modeswitch"], lambda: exit())
 func(args)

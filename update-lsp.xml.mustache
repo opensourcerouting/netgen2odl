@@ -1,0 +1,25 @@
+<input xmlns="urn:opendaylight:params:xml:ns:yang:topology:pcep">
+   <node>pcc://{{pccip}}</node>
+   <name>{{pathname}}</name>
+      <arguments>
+         <lsp xmlns="urn:opendaylight:params:xml:ns:yang:pcep:ietf:stateful">
+            <delegate>true</delegate>
+            <administrative>true</administrative>
+         </lsp>
+         <path-setup-type xmlns="urn:opendaylight:params:xml:ns:yang:pcep:ietf:stateful">
+             <pst>1</pst>
+         </path-setup-type>
+         <ero>
+{{#hop}}
+            <subobject>
+               <loose>false</loose>
+               <sid-type xmlns="urn:opendaylight:params:xml:ns:yang:pcep:segment:routing">ipv4-node-id</sid-type>
+               <m-flag xmlns="urn:opendaylight:params:xml:ns:yang:pcep:segment:routing">true</m-flag>
+               <sid xmlns="urn:opendaylight:params:xml:ns:yang:pcep:segment:routing">{{sid}}</sid>
+               <ip-address xmlns="urn:opendaylight:params:xml:ns:yang:pcep:segment:routing">{{ip}}</ip-address>
+            </subobject>
+{{/hop}}
+         </ero>
+      </arguments>
+   <network-topology-ref xmlns:topo="urn:TBD:params:xml:ns:yang:network-topology">/topo:network-topology/topo:topology[topo:topology-id="pcep-topology"]</network-topology-ref>
+</input>
