@@ -27,8 +27,7 @@ def parse_args():
         Also can request PCC resync.")
     subparsers = parser.add_subparsers(
         help='modeswitch',
-        dest='modeswitch',
-        required=True)
+        dest='modeswitch')
 
     #parentParser = argparse.ArgumentParser()
     parser.add_argument(
