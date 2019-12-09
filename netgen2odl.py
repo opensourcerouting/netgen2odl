@@ -214,7 +214,7 @@ def odl_request(args, apipath, xmlstring=None):
         logging.info("Request \n" + xmlstring + "\nto\n" + urlstring)
     else:
         req = urllib.request.Request(urlstring, headers=httpHeader)
-        logging.info("Request to " + urlstring)
+        logging.info("Request to " + urlstring + "With headers: " + str(httpHeader))
 
     return req
 
@@ -222,13 +222,18 @@ def do_add_request(args, xmlstring):
     req = odl_request(args,
                       "/restconf/operations/network-topology-pcep:add-lsp",
                       xmlstring)
-    with urllib.request.urlopen(req) as f:
-        if f.getcode() == 204:
-            return f.read().decode("utf-8")
-        else:
-            print(f.getcode())
-            print(f.read().decode("utf-8"))
-            raise ODLError("Got unexpected reply from ODL")
+    try:
+        with urllib.request.urlopen(req) as f:
+            if f.getcode() == 204:
+                return f.read().decode("utf-8")
+            else:
+                print(f.getcode())
+                print(f.read().decode("utf-8"))
+                raise ODLError("Got unexpected reply from ODL")
+    except urllib.error.HTTPError as e:
+        logging.error(str(e.code) + " " + str(e.reason) + " " + str(e.headers) + e.read().decode("utf-8"))
+        raise
+
 
 def do_add_requests(args, xmlstrings):
     for xmlstring in xmlstrings:
