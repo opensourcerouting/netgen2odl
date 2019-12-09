@@ -27,7 +27,8 @@ def parse_args():
         Also can request PCC resync.")
     subparsers = parser.add_subparsers(
         help='modeswitch',
-        dest='modeswitch')
+        dest='modeswitch'
+    )
 
     #parentParser = argparse.ArgumentParser()
     parser.add_argument(
@@ -96,9 +97,15 @@ def parse_isisd_config(config):
     	return None
     return srgb_start + srgb_offsetv4
 
-def build_network(yamlRouters):
+def build_network(yamlData):
     graph = nx.Graph()
-    for (routername, routerdata) in yamlRouters.items():
+    busses = {}
+    for (switchname, switchdata) in yamlData['switches'].items():
+        busses[switchname] = []
+        for (linkname, linkdata) in switchdata['links'].items():
+            busses[switchname].append(linkdata['peer'])
+    print(busses)
+    for (routername, routerdata) in yamlData['routers'].items():
         graph.add_node(routername)
         if "isisd" in routerdata["frr"]:
         	sid = parse_isisd_config(routerdata["frr"]["isisd"]["config"])
@@ -125,13 +132,21 @@ def build_network(yamlRouters):
                 pass
             graph[routername][routername+"/"+ifname]['mpls'] = ifdata['mpls']
             # edge from source interface to dest interface:
-            graph.add_edge(routername+"/"+ifname, destrouter+"/"+destinterface)
+            # if switch, add all connected on that bus
+            if destrouter in busses:
+                for peer in busses[destrouter]:
+                    srcedge = routername
+                    dstedge = peer[0]
+                    if srcedge == dstedge:
+                        continue
+                    graph.add_edge(routername+"/"+ifname, peer[0] + "/" + peer[1])
+            else:
+                graph.add_edge(routername + "/" + ifname, destrouter + "/" + destinterface)
     return graph
 
 def create_path_in_network(graph, paths):
     pathHop = []
     for path in paths:
-        print(path)
         currentPath = []
         for (router, interface) in path[:-1]:
             try:
@@ -297,7 +312,7 @@ def get_all_lsp_routes(args):
 
 def add(args):
     """Add a route to ODL'S LSP database"""
-    network = build_network(yaml.load(args['yamlfile'], Loader=yaml.Loader)['routers'])
+    network = build_network(yaml.load(args['yamlfile'], Loader=yaml.Loader))
     hop_ips = create_path_in_network(network, parse_path_arg(args))
     xmlstrings = create_xml(hop_ips, args)
     do_add_requests(args, xmlstrings)
