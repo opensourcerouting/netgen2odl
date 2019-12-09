@@ -284,36 +284,25 @@ def get_all_lsp_routes(args):
     enquoted_dest = urllib.parse.quote("pcc://" + args["pcc"], safe=":")
     req = odl_request(args,
                       "/restconf/operational/network-topology:network-topology/topology/pcep-topology/node/"+enquoted_dest)
-    with urllib.request.urlopen(req) as f:
-        if f.getcode() == 200:
-            res = f.read().decode("utf-8")
-#            logging.info(res)
-            xml = ET.fromstring(res)
-            paths = []
-            #xml_paths = xml.findall("./{urn:opendaylight:params:xml:ns:yang:topology:pcep}path-computation-client/{urn:opendaylight:params:xml:ns:yang:topology:pce}reported-lsp")
-            xml_pccs = xml.findall("./{urn:opendaylight:params:xml:ns:yang:topology:pcep}path-computation-client")
-            for pcc in xml_pccs:
-                routes = pcc.findall("{urn:opendaylight:params:xml:ns:yang:topology:pcep}reported-lsp")
-                for route in routes:
-                    routename = (route.find("{urn:opendaylight:params:xml:ns:yang:topology:pcep}name").text)
-                    paths.append({"name": routename})
-                    #print(route.findall("{urn:opendaylight:params:xml:ns:yang:topology:pcep}path/{urn:opendaylight:params:xml:ns:yang:topology:pcep}ero"))
-#                    for elem in route:
-#                        print(elem)
-                    #print(ero)
-#            for xml_path in xml_paths:
-#                subobjs = xml_path.findall("./ero/subobject")
-#                path = []
-#                for hop in subobjs:
-#                    sid =  xml_path.findall("./sid")[0].text
-#                    ip = xml_path.findall("./ip-address")[0].text
-#                    path.append((sid, ip))
-#                elem = { "name": xml_path.findall("./name")[0].text,
-#                         "path": path}
-#                path.append(elem)
-            return paths
-        else:
-            raise ODLError("API did not give a topology list")
+    logging.info(str(req.full_url) + str(req.header_items()) + str(req.data) + str(req.type) + str(req.host))
+    try:
+        with urllib.request.urlopen(req) as f:
+            if f.getcode() == 200:
+                res = f.read().decode("utf-8")
+                xml = ET.fromstring(res)
+                paths = []
+                xml_pccs = xml.findall("./{urn:opendaylight:params:xml:ns:yang:topology:pcep}path-computation-client")
+                for pcc in xml_pccs:
+                    routes = pcc.findall("{urn:opendaylight:params:xml:ns:yang:topology:pcep}reported-lsp")
+                    for route in routes:
+                        routename = (route.find("{urn:opendaylight:params:xml:ns:yang:topology:pcep}name").text)
+                        paths.append({"name": routename})
+                return paths
+            else:
+                raise ODLError("API did not give a topology list")
+    except urllib.error.HTTPError as e:
+        logging.error(str(e.code) + " " + str(e.reason) + " " + str(e.headers))
+        raise
 
 def add(args):
     """Add a route to ODL'S LSP database"""
