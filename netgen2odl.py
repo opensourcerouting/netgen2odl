@@ -176,9 +176,9 @@ def create_xml(pathHop, args, pathname=None):
     pccip = args['pcc']
     toRequest = []
     for path in pathHop:
-        templatedata = {'hop':[{'ip': hop, 'sid': sid} for hop, sid in path]}
+        templatedata = {'hop':[{'ip': hop, 'sid': sid} for hop, sid in path[1:]]}
         templatedata['pccip'] = pccip
-        templatedata['source-ipv4'] = pccip # ?!?
+        templatedata['source-ipv4'] = path[0][0]
         templatedata['destination-ipv4'] = path[-1][0] # ip of last hop?!?
         if pathname is None:
             templatedata['pathname'] = str(uuid.uuid4())[:8] # just a rundom 8 char word
@@ -224,7 +224,7 @@ def do_add_request(args, xmlstring):
                       xmlstring)
     try:
         with urllib.request.urlopen(req) as f:
-            if f.getcode() == 204:
+            if f.getcode() == 204 or f.getcode() == 200:
                 return f.read().decode("utf-8")
             else:
                 print(f.getcode())
