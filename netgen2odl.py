@@ -234,7 +234,6 @@ def do_add_request(args, xmlstring):
         logging.error(str(e.code) + " " + str(e.reason) + " " + str(e.headers) + e.read().decode("utf-8"))
         raise
 
-
 def do_add_requests(args, xmlstrings):
     for xmlstring in xmlstrings:
         do_add_request(args, xmlstring)
@@ -254,8 +253,6 @@ def do_update_request(args, xmlstring):
 def do_update_requests(args, xmlstrings):
     for xmlstring in xmlstrings:
         do_update_request(args, xmlstring)
-
-
 
 class PathParsingError(Exception):
     """Raised when path does not follow the requirements"""
@@ -352,9 +349,9 @@ def list_odl(args):
 
 def update_odl(args):
     """Update a LSP route"""
-    network = build_network(yaml.load(args['yamlfile'], Loader=yaml.Loader)['routers'])
+    network = build_network(yaml.load(args['yamlfile'], Loader=yaml.Loader))
     hop_ips = create_path_in_network(network, parse_path_arg(args))
-    xmlstrings = create_xml(hop_ips, args, args["pathname"])
+    xmlstrings = create_xml(hop_ips, args, args["pathname"])[0]
     do_update_request(args, xmlstrings)
 
 args = parse_args()
