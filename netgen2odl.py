@@ -104,7 +104,6 @@ def build_network(yamlData):
         busses[switchname] = []
         for (linkname, linkdata) in switchdata['links'].items():
             busses[switchname].append(linkdata['peer'])
-    print(busses)
     for (routername, routerdata) in yamlData['routers'].items():
         graph.add_node(routername)
         if "isisd" in routerdata["frr"]:
@@ -148,7 +147,7 @@ def create_path_in_network(graph, paths):
     pathHop = []
     for path in paths:
         currentPath = []
-        for (router, interface) in path[:-1]:
+        for (router, interface) in path:
             try:
                 currentPath.append(
                     (graph[router][router+"/"+interface]['ipv4'],
@@ -176,7 +175,7 @@ def create_xml(pathHop, args, pathname=None):
     pccip = args['pcc']
     toRequest = []
     for path in pathHop:
-        templatedata = {'hop':[{'ip': hop, 'sid': sid} for hop, sid in path[1:]]}
+        templatedata = {'hop':[{'ip': hop, 'sid': sid} for hop, sid in path]}
         templatedata['pccip'] = pccip
         templatedata['source-ipv4'] = path[0][0]
         templatedata['destination-ipv4'] = path[-1][0] # ip of last hop?!?
@@ -267,13 +266,12 @@ def parse_path_arg(args):
         if len(hop_chunks) < 2:
             raise PathParsingError("Paths with only one hop not allowed")
         hop = []
-        for hop_string in hop_chunks[:-1]:
+        for hop_string in hop_chunks:
             router_interface = hop_string.split("/")
             if len(router_interface) != 2:
                 raise PathParsingError("Format is router/interface")
             else:
                 hop.append(tuple(router_interface))
-        hop.append(hop_chunks[-1])
         paths.append(hop)
     return paths
 
