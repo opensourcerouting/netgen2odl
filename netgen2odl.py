@@ -54,11 +54,12 @@ def parse_args():
         help='The name of the YAML file')
     addParser.add_argument(
         'paths',
-        metavar='hop1/ifname1,hop2/ifname2...hopn/ifnamen',
+        #metavar='hop1/ifname1,hop2/ifname2...hopn/ifnamen',
+        metavar='hop1,hop2,..hopn',
         nargs="+",
         type=str,
-        help="Comma seperated lists with routernames-interfacenames along\
-        the desired paths, multiple possible")
+        help="Comma seperated lists with routernames along\
+        the desired paths")
 
     updateParser = subparsers.add_parser("update", parents=[addParser], add_help=False)
     updateParser.add_argument(
@@ -120,16 +121,21 @@ def build_network(yamlData):
             destinterface = ifdata['peer'][1]
 
             # edge from router to interface:
-            graph.add_edge(routername, routername+"/"+ifname)
+            #graph.add_edge(routername, routername+"/"+ifname)
             # add some metadata to the interface node
-            graph[routername][routername+"/"+ifname]['name'] = ifname
-            graph[routername][routername+"/"+ifname]['ipv4'] = ipv4 #ifdata['ipv4']
-            graph[routername][routername+"/"+ifname]['sid'] = sid
-            try:
-                graph[routername][routername+"/"+ifname]['ipv6'] = ifdata['ipv6']
-            except KeyError:
-                pass
-            graph[routername][routername+"/"+ifname]['mpls'] = ifdata['mpls']
+            #graph[routername][routername+"/"+ifname]['name'] = ifname
+            #graph[routername][routername+"/"+ifname]['ipv4'] = ipv4 #ifdata['ipv4']
+            #graph[routername][routername+"/"+ifname]['sid'] = sid
+
+            graph.nodes[routername]['name'] = ifname
+            graph.nodes[routername]['ipv4'] = ipv4 #ifdata['ipv4']
+            graph.nodes[routername]['sid'] = sid
+
+            #try:
+            #    graph[routername][routername+"/"+ifname]['ipv6'] = ifdata['ipv6']
+            #except KeyError:
+            #    pass
+            #graph[routername][routername+"/"+ifname]['mpls'] = ifdata['mpls']
             # edge from source interface to dest interface:
             # if switch, add all connected on that bus
             if destrouter in busses:
@@ -138,7 +144,7 @@ def build_network(yamlData):
                     dstedge = peer[0]
                     if srcedge == dstedge:
                         continue
-                    graph.add_edge(routername+"/"+ifname, peer[0] + "/" + peer[1])
+                    graph.add_edge(routername, peer[0])
             else:
                 graph.add_edge(routername + "/" + ifname, destrouter + "/" + destinterface)
     return graph
@@ -147,11 +153,12 @@ def create_path_in_network(graph, paths):
     pathHop = []
     for path in paths:
         currentPath = []
-        for (router, interface) in path:
+        #for (router, interface) in path:
+        for router in path:
             try:
                 currentPath.append(
-                    (graph[router][router+"/"+interface]['ipv4'],
-                     graph[router][router+"/"+interface]["sid"]))
+                    (graph.nodes[router]['ipv4'],
+                     graph.nodes[router]["sid"]))
             except KeyError:
                 print("The past does not exist in the specified network topology")
                 raise
@@ -266,13 +273,13 @@ def parse_path_arg(args):
         if len(hop_chunks) < 2:
             raise PathParsingError("Paths with only one hop not allowed")
         hop = []
-        for hop_string in hop_chunks:
-            router_interface = hop_string.split("/")
-            if len(router_interface) != 2:
-                raise PathParsingError("Format is router/interface")
-            else:
-                hop.append(tuple(router_interface))
-        paths.append(hop)
+        #for hop_string in hop_chunks:
+            #router_interface = hop_string.split("/")
+            #if len(router_interface) != 2:
+            #    raise PathParsingError("Format is router/interface")
+            #else:
+        #        hop.append(tuple(router_interface))
+        paths.append(hop_chunks)
     return paths
 
 def get_all_lsp_routes(args):
