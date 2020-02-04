@@ -30,12 +30,11 @@ def parse_args():
         dest='modeswitch'
     )
 
-    #parentParser = argparse.ArgumentParser()
     parser.add_argument(
         "--pcc",
         type=str,
         default="127.0.0.1",
-        help="Specify IP address of PCC instance. Defaults to localhost. Default %(default)s")
+        help="Specify IP address or the hostname of the PCC instance. Defaults to localhost. Default %(default)s")
     parser.add_argument(
         "--odl",
         type=str,
@@ -45,13 +44,13 @@ def parse_args():
         "--verbose", "-v",
         default = 0,
         action="count")
+    parser.add_argument(
+    'yamlfile',
+    metavar='file.yaml',
+    type=argparse.FileType('r'),
+    help='The name of the YAML file')
 
     addParser = subparsers.add_parser("add")
-    addParser.add_argument(
-        'yamlfile',
-        metavar='file.yaml',
-        type=argparse.FileType('r'),
-        help='The name of the YAML file')
     addParser.add_argument(
         'paths',
         #metavar='hop1/ifname1,hop2/ifname2...hopn/ifnamen',
@@ -75,30 +74,37 @@ def parse_args():
 
     syncParser = subparsers.add_parser("sync")
 
-
-    return vars(parser.parse_args())
+    args = vars(parser.parse_args())
+    return args
 
 def parse_isisd_config(config):
     lines = config.split("\n")
     srgb_start = None
     srgb_offsetv4 = None
     srgb_offsetv6 = None
+    ret = {}
     for line in lines:
+        # segment-routing global-block 16000 23999
         if line.startswith(" segment-routing global-block "):
             items = line.split(" ")
             srgb_start = int(items[3])
+        # segment-routing prefix 5.5.5.5/32 index 50 no-php-flag
         if line.startswith(" segment-routing prefix "):
             items = line.split(" ")
             parsed_network = ipaddress.ip_network(items[3])
             if isinstance(parsed_network, ipaddress.IPv4Network):
                 srgb_offsetv4 = int(items[5])
+                ret['ipv4'] = str(parsed_network.network_address)
             elif isinstance(parsed_network, ipaddress.IPv6Network):
                 srgb_offsetv6= int(items[5])
+                ret['ipv6'] = str(parsed_network.network_address)
     if srgb_start == None:
-    	return None
-    return srgb_start + srgb_offsetv4
+        ret['srgb_ipv4_address'] = None
+    ret['srgb_ipv4_address'] = srgb_start + srgb_offsetv4
+    return ret
 
-def build_network(yamlData):
+def build_network(args):
+    yamlData = yaml.load(args['yamlfile'], Loader=yaml.Loader)
     graph = nx.Graph()
     busses = {}
     for (switchname, switchdata) in yamlData['switches'].items():
@@ -106,17 +112,21 @@ def build_network(yamlData):
         for (linkname, linkdata) in switchdata['links'].items():
             busses[switchname].append(linkdata['peer'])
     for (routername, routerdata) in yamlData['routers'].items():
+        # ignore routers without frr
+        if 'frr' not in routerdata:
+            continue
         graph.add_node(routername)
         if "isisd" in routerdata["frr"]:
-        	sid = parse_isisd_config(routerdata["frr"]["isisd"]["config"])
-        else:
-        	sid = None
+            isisd_config = parse_isisd_config(routerdata["frr"]["isisd"]["config"])
+            graph.nodes[routername]['ipv4'] = isisd_config['ipv4']
+            graph.nodes[routername]['sid'] = isisd_config['srgb_ipv4_address']
+            # Resolve pcc provided as a hostname
+            if args['pcc'] == routername:
+                args['pcc'] = isisd_config['ipv4']
         ipv4 = ""
         for (ifname, ifdata) in routerdata["links"].items():
             if ifname == "lo":
-                ipv4 = ifdata['ipv4'][:-3]
                 continue
-
             destrouter = ifdata['peer'][0]
             destinterface = ifdata['peer'][1]
 
@@ -127,10 +137,6 @@ def build_network(yamlData):
             #graph[routername][routername+"/"+ifname]['ipv4'] = ipv4 #ifdata['ipv4']
             #graph[routername][routername+"/"+ifname]['sid'] = sid
 
-            graph.nodes[routername]['name'] = ifname
-            graph.nodes[routername]['ipv4'] = ipv4 #ifdata['ipv4']
-            graph.nodes[routername]['sid'] = sid
-
             #try:
             #    graph[routername][routername+"/"+ifname]['ipv6'] = ifdata['ipv6']
             #except KeyError:
@@ -138,22 +144,21 @@ def build_network(yamlData):
             #graph[routername][routername+"/"+ifname]['mpls'] = ifdata['mpls']
             # edge from source interface to dest interface:
             # if switch, add all connected on that bus
-            if destrouter in busses:
-                for peer in busses[destrouter]:
-                    srcedge = routername
-                    dstedge = peer[0]
-                    if srcedge == dstedge:
-                        continue
+        if destrouter in busses:
+            for peer in busses[destrouter]:
+                srcedge = routername
+                dstedge = peer[0]
+                if srcedge == dstedge:
+                    continue
                     graph.add_edge(routername, peer[0])
-            else:
-                graph.add_edge(routername + "/" + ifname, destrouter + "/" + destinterface)
+                else:
+                    graph.add_edge(routername + "/" + ifname, destrouter + "/" + destinterface)
     return graph
 
 def create_path_in_network(graph, paths):
     pathHop = []
     for path in paths:
         currentPath = []
-        #for (router, interface) in path:
         for router in path:
             try:
                 currentPath.append(
@@ -162,12 +167,6 @@ def create_path_in_network(graph, paths):
             except KeyError:
                 print("The past does not exist in the specified network topology")
                 raise
-#        try:
-#            last_router = path[-1]
-#            currentPath.append(graph[last_router])
-#        except KeyError:
-#            print("Last router could not be found")
-#            raise
         pathHop.append(currentPath)
     return pathHop
 
@@ -273,12 +272,6 @@ def parse_path_arg(args):
         if len(hop_chunks) < 2:
             raise PathParsingError("Paths with only one hop not allowed")
         hop = []
-        #for hop_string in hop_chunks:
-            #router_interface = hop_string.split("/")
-            #if len(router_interface) != 2:
-            #    raise PathParsingError("Format is router/interface")
-            #else:
-        #        hop.append(tuple(router_interface))
         paths.append(hop_chunks)
     return paths
 
@@ -306,14 +299,13 @@ def get_all_lsp_routes(args):
         logging.error(str(e.code) + " " + str(e.reason) + " " + str(e.headers))
         raise
 
-def add(args):
+def add(args, network):
     """Add a route to ODL'S LSP database"""
-    network = build_network(yaml.load(args['yamlfile'], Loader=yaml.Loader))
     hop_ips = create_path_in_network(network, parse_path_arg(args))
     xmlstrings = create_xml(hop_ips, args)
     do_add_requests(args, xmlstrings)
 
-def flush_odl(args):
+def flush_odl(args, network):
     '''Delete all existing routes in ODL LSP database'''
     routes = get_all_lsp_routes(args)
     print("Found " + str(len(routes)) + " in ODL")
@@ -334,7 +326,7 @@ def flush_odl(args):
                                str(f.getcode()) +
                                f.read().decode("utf-8"))
 
-def sync_odl(args):
+def sync_odl(args, network):
     """Send request to sync ODL'S LSP with the PCC"""
     xmlstring = render_template("sync-lsp.xml.mustache",
                                 {"pccip": args["pcc"]})
@@ -347,17 +339,24 @@ def sync_odl(args):
         else:
             raise ODLError("Sync failed. HTTP" + str(f.getcode()) + f.read().decode("utf-8"))
 
-def list_odl(args):
+def list_odl(args, network):
     '''Get all LSP routes inside ODL'''
     routes = get_all_lsp_routes(args)
     print(routes)
 
-def update_odl(args):
+def update_odl(args, network):
     """Update a LSP route"""
-    network = build_network(yaml.load(args['yamlfile'], Loader=yaml.Loader))
     hop_ips = create_path_in_network(network, parse_path_arg(args))
     xmlstrings = create_xml(hop_ips, args, args["pathname"])[0]
     do_update_request(args, xmlstrings)
+
+def resolve_pcc_ip(args, network):
+    '''Resolves hostnames using network topology file'''
+    try:
+        ipaddress.ip_address(args['pcc'])
+    except ValueError:
+        args['pcc'] = network.nodes[routername]['ipv4']
+    return args
 
 args = parse_args()
 if args["verbose"] > 0:
@@ -368,4 +367,6 @@ opts = {"add": add,
         "sync": sync_odl,
         "update": update_odl}
 func = opts.get(args["modeswitch"], lambda: exit())
-func(args)
+network = build_network(args)
+args = resolve_pcc_ip(args, network)
+func(args, network)
