@@ -59,6 +59,13 @@ def parse_args():
         type=str,
         help="Comma seperated lists with routernames along\
         the desired paths")
+    addParser.add_argument(
+        'operational',
+        type = str,
+        help = "The desired operational status of the LSP",
+        choices = ['up', 'down', 'active', 'going-up', 'going-down'],
+        #required = True
+        )
 
     updateParser = subparsers.add_parser("update", parents=[addParser], add_help=False)
     updateParser.add_argument(
@@ -185,6 +192,7 @@ def create_xml(pathHop, args, pathname=None):
         templatedata['pccip'] = pccip
         templatedata['source-ipv4'] = path[0][0]
         templatedata['destination-ipv4'] = path[-1][0] # ip of last hop?!?
+        templatedata['operational'] = str(args['operational'])
         if pathname is None:
             templatedata['pathname'] = str(uuid.uuid4())[:8] # just a rundom 8 char word
             toRequest.append(render_template("add-lsp.xml.mustache", templatedata))
@@ -284,6 +292,7 @@ def get_all_lsp_routes(args):
         with urllib.request.urlopen(req) as f:
             if f.getcode() == 200:
                 res = f.read().decode("utf-8")
+                logging.info(res)
                 xml = ET.fromstring(res)
                 paths = []
                 xml_pccs = xml.findall("./{urn:opendaylight:params:xml:ns:yang:topology:pcep}path-computation-client")
