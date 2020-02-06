@@ -6,12 +6,12 @@ Also can list and delete existing records in ODL and request resyncronisation wi
 Installation
 ------------
 
-Clone this repository and `cd` into it. Create virtualenv activate it and install requirements. Make sure to use Python3.
+Clone this repository and `cd` into it. Create virtualenv activate it and install requirements. Make sure to use Python (>=3.6).
 
 ```console
 $ virtualenv n2oenv
 $ source ./n2oenv/bin/activate
-$ pip install -r requirements.txt
+$ pip3 install -r requirements.txt
 ```
 
 Setup
@@ -19,11 +19,12 @@ Setup
 
 ### ODL
 
+- (Get dev version of ODL: `git clone "https://git.opendaylight.org/gerrit/controller"`)
 - Start it
 - In CLI: `feature:install webconsole odl-restconf odl-bgpcep-pcep`
 
 Help
 -----
 
-Run `python3 netgen2odl.py --help` for help.
+Run `./netgen2odl.py --help` for help.
 
