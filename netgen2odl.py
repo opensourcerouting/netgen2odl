@@ -277,8 +277,6 @@ def parse_path_arg(args):
     paths = []
     for path in patharg:
         hop_chunks = path.split(",")
-        if len(hop_chunks) < 2:
-            raise PathParsingError("Paths with only one hop not allowed")
         hop = []
         paths.append(hop_chunks)
     return paths
